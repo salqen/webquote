@@ -35,6 +35,82 @@ const MV = {
   fontMono:    "'JetBrains Mono', monospace",
 };
 
+// ─── ADMIN PROJEKTY (localStorage register) ───────────────────
+// Builder nemá vlastnú DB tabuľku pre zoznam projektov (iba
+// realtime broadcast cez Supabase), preto zoznam projektov, ktoré
+// admin otvoril/vytvoril, držíme v localStorage prehliadača admina.
+const PROJECTS_KEY = "wq_admin_projects";
+
+function slugify(str) {
+  return (str || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // odstráň diakritiku
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+function loadProjects() {
+  try {
+    const raw = localStorage.getItem(PROJECTS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    return Object.entries(obj)
+      .map(([id, v]) => ({ id, ...v }))
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  } catch { return []; }
+}
+
+function saveProjectsObj(obj) {
+  try { localStorage.setItem(PROJECTS_KEY, JSON.stringify(obj)); } catch {}
+}
+
+function upsertProject(id, name) {
+  if (!id) return;
+  try {
+    const raw = localStorage.getItem(PROJECTS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    obj[id] = { name: name || obj[id]?.name || "Bez názvu", updatedAt: Date.now() };
+    saveProjectsObj(obj);
+  } catch {}
+}
+
+function removeProject(id) {
+  try {
+    const raw = localStorage.getItem(PROJECTS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    delete obj[id];
+    saveProjectsObj(obj);
+  } catch {}
+}
+
+// Premenuje slug (URL) projektu — zachová meno a dátum, presunie pod nový kľúč.
+// Vráti true ak sa podarilo, false ak nový slug už existuje (a je iný než starý).
+function renameProjectId(oldId, newId) {
+  if (!newId || newId === oldId) return true;
+  try {
+    const raw = localStorage.getItem(PROJECTS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    if (obj[newId]) return false; // kolízia — URL už existuje
+    obj[newId] = obj[oldId] || { name: "Bez názvu", updatedAt: Date.now() };
+    delete obj[oldId];
+    saveProjectsObj(obj);
+    return true;
+  } catch { return false; }
+}
+
+function generateRandomId() {
+  return Math.random().toString(36).slice(2, 8).toLowerCase();
+}
+
+function uniqueSlug(base) {
+  const existing = new Set(loadProjects().map(p => p.id));
+  let slug = slugify(base) || generateRandomId();
+  if (!existing.has(slug)) return slug;
+  let i = 2;
+  while (existing.has(`${slug}-${i}`)) i++;
+  return `${slug}-${i}`;
+}
+
 // ─── ADMIN GATE (prihlásenie) ─────────────────────────────────
 function AdminGate({ children }) {
   const ADMIN_PW = import.meta.env.VITE_ADMIN_PASSWORD || "";
@@ -228,16 +304,204 @@ function PoweredByBadge() {
   );
 }
 
+// ─── ADMIN HOME (zoznam projektov) ─────────────────────────────
+function AdminHome() {
+  const [projects, setProjects] = useState(() => loadProjects());
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameVal, setRenameVal] = useState("");
+  const [renameErr, setRenameErr] = useState(false);
+
+  const refresh = () => setProjects(loadProjects());
+
+  const openProject = (id) => { window.location.href = `/admin?session=${id}`; };
+
+  const createProject = () => {
+    const name = window.prompt("Názov nového projektu:", "");
+    if (name === null) return; // zrušené
+    const slug = uniqueSlug(name || "novy-projekt");
+    upsertProject(slug, name?.trim() || "Bez názvu");
+    window.location.href = `/admin?session=${slug}`;
+  };
+
+  const startRename = (p) => { setRenamingId(p.id); setRenameVal(p.id); setRenameErr(false); };
+
+  const confirmRename = (oldId) => {
+    const newSlug = slugify(renameVal) || oldId;
+    const ok = renameProjectId(oldId, newSlug);
+    if (!ok) { setRenameErr(true); return; }
+    setRenamingId(null);
+    refresh();
+  };
+
+  const deleteProject = (p) => {
+    if (!window.confirm(`Naozaj zmazať projekt "${p.name}" zo zoznamu?\n\n(Toto zmaže iba záznam v admin zozname, nie dáta projektu — tie žijú v session linku.)`)) return;
+    removeProject(p.id);
+    refresh();
+  };
+
+  const copyLink = (id) => {
+    navigator.clipboard.writeText(`${window.location.origin}/?session=${id}`);
+  };
+
+  return (
+    <div style={{
+      minHeight:"100vh", background:MV.bg, fontFamily:MV.fontBody,
+      padding:"2.5rem 1.5rem",
+      backgroundImage:`
+        linear-gradient(rgba(255,106,0,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,106,0,0.03) 1px, transparent 1px)
+      `,
+      backgroundSize:"40px 40px",
+    }}>
+      <style>{`
+        .wq-row:hover { border-color:${MV.orange}66 !important; background:${MV.surfaceHigh} !important; }
+        .wq-iconbtn:hover { background:${MV.orange}22 !important; border-color:${MV.orange} !important; color:${MV.orange} !important; }
+      `}</style>
+
+      <div style={{maxWidth:760, margin:"0 auto"}}>
+        {/* Hlavička */}
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"2rem"}}>
+          <div>
+            <div style={{
+              fontFamily:MV.fontDisplay, fontWeight:800, fontSize:"1.6rem",
+              color:MV.text, letterSpacing:"-0.03em",
+            }}>
+              ⚡ Web<span style={{color:MV.orange}}>Quote</span>
+            </div>
+            <div style={{
+              fontSize:"0.65rem", color:MV.muted, fontFamily:MV.fontMono,
+              letterSpacing:"0.1em", textTransform:"uppercase", marginTop:2,
+            }}>
+              Projekty · {projects.length} {projects.length===1?"projekt":projects.length>=2&&projects.length<=4?"projekty":"projektov"}
+            </div>
+          </div>
+          <button onClick={createProject} style={{
+            background:`linear-gradient(135deg,${MV.orange}22,${MV.orangeLight}22)`,
+            border:`1.5px solid ${MV.orange}`, color:MV.orange,
+            borderRadius:10, padding:"0.65rem 1.1rem", cursor:"pointer",
+            fontFamily:MV.fontBody, fontWeight:700, fontSize:"0.82rem",
+            display:"flex", alignItems:"center", gap:"0.4rem",
+          }}>
+            + Nový projekt
+          </button>
+        </div>
+
+        {/* Zoznam projektov */}
+        {projects.length === 0 ? (
+          <div style={{
+            border:`1px dashed ${MV.borderHi}`, borderRadius:14,
+            padding:"3rem 1.5rem", textAlign:"center",
+            color:MV.muted, fontSize:"0.85rem",
+          }}>
+            Zatiaľ žiadne projekty. Klikni na <strong style={{color:MV.text}}>+ Nový projekt</strong> a začni brief.
+          </div>
+        ) : (
+          <div style={{display:"flex", flexDirection:"column", gap:"0.6rem"}}>
+            {projects.map(p => (
+              <div key={p.id} className="wq-row" style={{
+                display:"flex", alignItems:"center", gap:"0.75rem",
+                background:MV.surface, border:`1.5px solid ${MV.border}`,
+                borderRadius:12, padding:"0.85rem 1rem",
+                transition:"all .15s", cursor:"pointer",
+              }} onClick={(e)=>{ if (renamingId===p.id) return; openProject(p.id); }}>
+
+                <div style={{
+                  width:38, height:38, borderRadius:10, flexShrink:0,
+                  background:`${MV.orange}14`, border:`1px solid ${MV.orange}33`,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:"1rem",
+                }}>📋</div>
+
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{
+                    fontWeight:700, fontSize:"0.88rem", color:MV.text,
+                    whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+                  }}>
+                    {p.name || "Bez názvu"}
+                  </div>
+
+                  {renamingId === p.id ? (
+                    <div onClick={e=>e.stopPropagation()} style={{display:"flex", alignItems:"center", gap:"0.4rem", marginTop:4}}>
+                      <span style={{fontFamily:MV.fontMono, fontSize:"0.68rem", color:MV.muted}}>?session=</span>
+                      <input autoFocus value={renameVal}
+                        onChange={e=>{ setRenameVal(e.target.value); setRenameErr(false); }}
+                        onKeyDown={e=>{ if(e.key==="Enter") confirmRename(p.id); if(e.key==="Escape") setRenamingId(null); }}
+                        style={{
+                          background:MV.bg, border:`1.5px solid ${renameErr?"#ef4444":MV.orange}`,
+                          borderRadius:6, padding:"0.2rem 0.45rem", color:MV.text,
+                          fontFamily:MV.fontMono, fontSize:"0.7rem", width:160,
+                        }}
+                      />
+                      <button onClick={()=>confirmRename(p.id)} style={{
+                        background:MV.green, color:MV.bg, border:"none", borderRadius:6,
+                        padding:"0.2rem 0.55rem", fontSize:"0.68rem", fontWeight:700, cursor:"pointer",
+                      }}>✓</button>
+                      <button onClick={()=>setRenamingId(null)} style={{
+                        background:"none", color:MV.muted, border:`1px solid ${MV.border}`, borderRadius:6,
+                        padding:"0.2rem 0.55rem", fontSize:"0.68rem", cursor:"pointer",
+                      }}>✕</button>
+                      {renameErr && <span style={{fontSize:"0.62rem", color:"#f87171", fontFamily:MV.fontMono}}>URL už existuje</span>}
+                    </div>
+                  ) : (
+                    <div style={{
+                      fontFamily:MV.fontMono, fontSize:"0.68rem", color:MV.muted,
+                      marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+                    }}>
+                      ?session={p.id} · {p.updatedAt ? new Date(p.updatedAt).toLocaleDateString("sk-SK") : "—"}
+                    </div>
+                  )}
+                </div>
+
+                {renamingId !== p.id && (
+                  <div onClick={e=>e.stopPropagation()} style={{display:"flex", gap:"0.35rem", flexShrink:0}}>
+                    <button className="wq-iconbtn" title="Kopírovať klientský link" onClick={()=>copyLink(p.id)} style={{
+                      background:"none", border:`1px solid ${MV.border}`, color:MV.muted,
+                      borderRadius:7, width:30, height:30, cursor:"pointer", fontSize:"0.78rem",
+                    }}>📋</button>
+                    <button className="wq-iconbtn" title="Upraviť URL projektu" onClick={()=>startRename(p)} style={{
+                      background:"none", border:`1px solid ${MV.border}`, color:MV.muted,
+                      borderRadius:7, width:30, height:30, cursor:"pointer", fontSize:"0.78rem",
+                    }}>✏️</button>
+                    <button className="wq-iconbtn" title="Zmazať zo zoznamu" onClick={()=>deleteProject(p)} style={{
+                      background:"none", border:`1px solid ${MV.border}`, color:MV.muted,
+                      borderRadius:7, width:30, height:30, cursor:"pointer", fontSize:"0.78rem",
+                    }}>🗑</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── ADMIN FLOW PANEL (zobrazí sa po prihlásení) ─────────────
-function AdminFlowPanel({ sessionId }) {
+function AdminFlowPanel({ sessionId, projectName }) {
   const [copied, setCopied] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameVal, setRenameVal] = useState(sessionId);
+  const [renameErr, setRenameErr] = useState(false);
   const clientUrl = `${window.location.origin}/?session=${sessionId}`;
 
   const copy = () => {
     navigator.clipboard.writeText(clientUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  const startRename = () => { setRenameVal(sessionId); setRenameErr(false); setRenaming(true); };
+
+  const confirmRename = () => {
+    const newSlug = slugify(renameVal);
+    if (!newSlug) { setRenameErr(true); return; }
+    if (newSlug === sessionId) { setRenaming(false); return; }
+    const ok = renameProjectId(sessionId, newSlug);
+    if (!ok) { setRenameErr(true); return; }
+    // presmeruj na rovnaký projekt pod novým URL
+    window.location.href = `/admin?session=${newSlug}`;
   };
 
   return (
@@ -253,8 +517,9 @@ function AdminFlowPanel({ sessionId }) {
           display:"flex", alignItems:"center", justifyContent:"space-between",
           padding:"0.35rem 1.25rem",
         }}>
-          <span style={{fontFamily:MV.fontMono, fontSize:"0.6rem", color:MV.muted, letterSpacing:"0.1em"}}>
-            ⚡ WEBQUOTE ADMIN · SESSION <span style={{color:MV.orange}}>{sessionId.slice(0,8).toUpperCase()}</span>
+          <span style={{fontFamily:MV.fontMono, fontSize:"0.6rem", color:MV.muted, letterSpacing:"0.1em", display:"flex", alignItems:"center", gap:"0.6rem"}}>
+            <a href="/admin" style={{color:MV.muted, textDecoration:"none"}}>← Projekty</a>
+            ⚡ {projectName || "WEBQUOTE ADMIN"} · <span style={{color:MV.orange}}>{sessionId}</span>
           </span>
           <button onClick={()=>setCollapsed(false)} style={{
             background:"none", border:`1px solid ${MV.border}`, borderRadius:6,
@@ -273,6 +538,11 @@ function AdminFlowPanel({ sessionId }) {
             marginBottom:"0.75rem",
           }}>
             <div style={{display:"flex", alignItems:"center", gap:"0.6rem"}}>
+              <a href="/admin" style={{
+                fontFamily:MV.fontMono, fontSize:"0.62rem", color:MV.muted,
+                textDecoration:"none", border:`1px solid ${MV.border}`,
+                borderRadius:6, padding:"0.2rem 0.5rem", letterSpacing:"0.04em",
+              }}>← Projekty</a>
               <span style={{
                 fontFamily:MV.fontDisplay, fontWeight:800, fontSize:"0.9rem",
                 color:MV.text, letterSpacing:"-0.02em",
@@ -391,6 +661,13 @@ function AdminFlowPanel({ sessionId }) {
             }}>
               {clientUrl}
             </span>
+            <button onClick={startRename} title="Upraviť URL projektu" style={{
+              background:"none", border:`1px solid ${MV.border}`, color:MV.muted,
+              borderRadius:8, padding:"0.5rem 0.65rem", cursor:"pointer",
+              fontSize:"0.78rem", whiteSpace:"nowrap",
+            }}>
+              ✏️ URL
+            </button>
             <button onClick={copy} style={{
               background: copied ? MV.green : MV.orange,
               color: MV.bg, border:"none", borderRadius:8,
@@ -403,6 +680,42 @@ function AdminFlowPanel({ sessionId }) {
               {copied ? "✓ Skopírované!" : "📋 Kopírovať link"}
             </button>
           </div>
+
+          {/* Editácia URL projektu — nahradí session kód čitateľným slugom */}
+          {renaming && (
+            <div style={{
+              display:"flex", alignItems:"center", gap:"0.5rem",
+              marginTop:"0.5rem", background:MV.surface,
+              border:`1.5px solid ${renameErr?"#ef4444":MV.orange}`,
+              borderRadius:10, padding:"0.5rem 0.625rem 0.5rem 0.875rem",
+            }}>
+              <span style={{fontFamily:MV.fontMono, fontSize:"0.62rem", color:MV.muted, whiteSpace:"nowrap"}}>
+                ?session=
+              </span>
+              <input
+                autoFocus value={renameVal}
+                onChange={e=>{ setRenameVal(e.target.value); setRenameErr(false); }}
+                onKeyDown={e=>{ if(e.key==="Enter") confirmRename(); if(e.key==="Escape") setRenaming(false); }}
+                placeholder="napr. cafe-paradise"
+                style={{
+                  flex:1, background:MV.bg, border:`1px solid ${MV.border}`,
+                  borderRadius:6, padding:"0.3rem 0.55rem", color:MV.text,
+                  fontFamily:MV.fontMono, fontSize:"0.72rem",
+                }}
+              />
+              <button onClick={confirmRename} style={{
+                background:MV.green, color:MV.bg, border:"none", borderRadius:7,
+                padding:"0.35rem 0.75rem", fontSize:"0.7rem", fontWeight:700, cursor:"pointer",
+              }}>✓ Uložiť</button>
+              <button onClick={()=>setRenaming(false)} style={{
+                background:"none", color:MV.muted, border:`1px solid ${MV.border}`, borderRadius:7,
+                padding:"0.35rem 0.75rem", fontSize:"0.7rem", cursor:"pointer",
+              }}>Zrušiť</button>
+              {renameErr && <span style={{fontSize:"0.62rem", color:"#f87171", fontFamily:MV.fontMono, whiteSpace:"nowrap"}}>
+                Neplatná alebo už použitá URL
+              </span>}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -412,8 +725,15 @@ function AdminFlowPanel({ sessionId }) {
 // ─── ROOT ─────────────────────────────────────────────────────
 export default function App() {
   // Admin je VÝHRADNE na /admin ceste — klient na / nikdy nevie že admin existuje
-  const isAdmin   = window.location.pathname.startsWith("/admin");
-  const sessionId = getSessionId();
+  const isAdmin = window.location.pathname.startsWith("/admin");
+  const sessionParam = new URLSearchParams(window.location.search).get("session");
+
+  // Admin bez ?session= → zoznam projektov (úvod), nie rovno builder
+  if (isAdmin && !sessionParam) {
+    return <AdminGate><AdminHome /></AdminGate>;
+  }
+
+  const sessionId = sessionParam || getSessionId();
 
   // Ak nie je session link ani /admin cesta → presmerovanie na admin login
   if (!isAdmin && !sessionId) {
@@ -435,6 +755,12 @@ export default function App() {
     channelRef.current = channel;
     return () => { channel.destroy(); channelRef.current = null; };
   }, [sessionId, isAdmin]);
+
+  // Admin: zaregistruj/aktualizuj projekt v lokálnom zozname (úvod /admin)
+  // vždy keď sa zmení názov projektu, nech sa zoznam drží aktuálny.
+  useEffect(() => {
+    if (isAdmin) upsertProject(sessionId, brief.projectName || "Bez názvu");
+  }, [isAdmin, sessionId, brief.projectName]);
 
   const handleBriefChange = useCallback((patch) => {
     setBrief(prev => {
@@ -463,7 +789,7 @@ export default function App() {
       `}</style>
 
       {/* Admin flow panel (zbaletelný, s krokmi + link pre klienta) */}
-      {isAdmin && <AdminFlowPanel sessionId={sessionId} />}
+      {isAdmin && <AdminFlowPanel sessionId={sessionId} projectName={brief.projectName} />}
 
       {/* Builder — odsadenie pre admin panel (rozbalený ~130px, zbalený ~36px) */}
       <div style={{paddingTop: isAdmin ? 148 : 0}}>
