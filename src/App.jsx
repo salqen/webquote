@@ -232,7 +232,7 @@ function PoweredByBadge() {
 function AdminFlowPanel({ sessionId }) {
   const [copied, setCopied] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const clientUrl = `${window.location.origin}${window.location.pathname}?session=${sessionId}`;
+  const clientUrl = `${window.location.origin}/?session=${sessionId}`;
 
   const copy = () => {
     navigator.clipboard.writeText(clientUrl);
@@ -411,7 +411,8 @@ function AdminFlowPanel({ sessionId }) {
 
 // ─── ROOT ─────────────────────────────────────────────────────
 export default function App() {
-  const isAdmin   = getRole() === "admin";
+  // Admin je VÝHRADNE na /admin ceste — klient na / nikdy nevie že admin existuje
+  const isAdmin   = window.location.pathname.startsWith("/admin");
   const sessionId = getSessionId();
 
   const [brief, setBrief] = useState(DEFAULT_BRIEF);
@@ -471,9 +472,4 @@ export default function App() {
       </div>
 
       <PoweredByBadge />
-    </>
-  );
-
-  if (isAdmin) return <AdminGate>{inner}</AdminGate>;
-  return inner;
-}
+ 
