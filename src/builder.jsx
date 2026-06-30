@@ -74,9 +74,9 @@ function createRealtimeChannel(sessionId, onMessage) {
 // ─── THEME ────────────────────────────────────────────────
 const THEMES = {
   dark: {
-    bg:"#111111", panel:"#171717", card:"#1c1c1c",
-    border:"#1e1e1e", text:"#e8e8e8", muted:"#505050", subtle:"#2a2a2a",
-    inpBg:"#1c1c1c", cardActive:"#222222", codeBg:"#0d0d0d", codeText:"#7db88a", checkbox:"#ededed", desc:"#9a9a9a",
+    bg:"#05060d", panel:"#0c0d1a", card:"#12142a",
+    border:"#1a1c35", text:"#e8eef5", muted:"#5a6080", subtle:"#1a1c35",
+    inpBg:"#0c0d1a", cardActive:"#12142a", codeBg:"#05060d", codeText:"#ff6a00", checkbox:"#ff6a00", desc:"#5a6080",
   },
   light: {
     bg:"#f8f6f2", panel:"#f0ede8", card:"#e8e4df",
