@@ -415,6 +415,12 @@ export default function App() {
   const isAdmin   = window.location.pathname.startsWith("/admin");
   const sessionId = getSessionId();
 
+  // Ak nie je session link ani /admin cesta → presmerovanie na admin login
+  if (!isAdmin && !sessionId) {
+    window.location.replace("/admin");
+    return null;
+  }
+
   const [brief, setBrief] = useState(DEFAULT_BRIEF);
   const [theme, setTheme] = useState("dark");
   const channelRef = useRef(null);
