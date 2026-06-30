@@ -472,4 +472,9 @@ export default function App() {
       </div>
 
       <PoweredByBadge />
- 
+    </>
+  );
+
+  if (isAdmin) return <AdminGate>{inner}</AdminGate>;
+  return inner;
+}
