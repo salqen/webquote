@@ -1,73 +1,122 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────
-// Doplň svoje credentials z Supabase → Settings → API
+// Credentials z Supabase → Settings → API (cez .env)
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL  || "";
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
-// ─── SUPABASE REALTIME (vanilla, bez SDK) ─────────────────
+// Je Supabase nakonfigurovaný? (bez neho appka beží len lokálne)
+export const hasSupabase =
+  !!SUPABASE_URL && !!SUPABASE_ANON && !SUPABASE_URL.includes("YOUR_PROJECT");
+
+const supabase = hasSupabase ? createClient(SUPABASE_URL, SUPABASE_ANON) : null;
+
+// Unikátne ID tejto záložky prehliadača — ochrana proti echo-slučke
+// pri obojsmernom realtime sync (admin ↔ klient).
+const TAB_ID = Math.random().toString(36).slice(2, 10);
+
+// ─── SUPABASE REALTIME (broadcast cez oficiálne SDK) ──────
 function createRealtimeChannel(sessionId, onMessage) {
-  const wsUrl = SUPABASE_URL
-    .replace("https://", "wss://")
-    .replace("http://",  "ws://");
-  const url = `${wsUrl}/realtime/v1/websocket?apikey=${SUPABASE_ANON}&vsn=1.0.0`;
+  if (!supabase) return { broadcast: () => {}, destroy: () => {} };
 
-  let ws = null;
-  let heartbeat = null;
-  let reconnectTimer = null;
-  let dead = false;
+  const channel = supabase.channel(`brief-${sessionId}`, {
+    config: { broadcast: { self: false } },
+  });
 
-  function connect() {
-    if (dead) return;
-    ws = new WebSocket(url);
+  channel.on("broadcast", { event: "brief_update" }, (msg) => {
+    if (msg?.payload?.from === TAB_ID) return; // vlastná správa — ignoruj
+    if (msg?.payload?.data) onMessage(msg.payload.data);
+  });
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({
-        topic: `realtime:brief-${sessionId}`,
-        event: "phx_join",
-        payload: {},
-        ref: "1",
-      }));
-      heartbeat = setInterval(() => {
-        ws?.readyState === WebSocket.OPEN &&
-          ws.send(JSON.stringify({ topic:"phoenix", event:"heartbeat", payload:{}, ref:"hb" }));
-      }, 20000);
-    };
+  channel.subscribe();
 
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.event === "broadcast" && msg.payload?.type === "brief_update") {
-          onMessage(msg.payload.data);
-        }
-      } catch {}
-    };
+  return {
+    broadcast: (data) => {
+      channel.send({
+        type: "broadcast",
+        event: "brief_update",
+        payload: { from: TAB_ID, data },
+      });
+    },
+    destroy: () => { supabase.removeChannel(channel); },
+  };
+}
 
-    ws.onclose = () => {
-      clearInterval(heartbeat);
-      if (!dead) reconnectTimer = setTimeout(connect, 3000);
-    };
-  }
+// ─── SUPABASE DATABÁZA (perzistencia sessions) ─────────────
+// Tabuľka: public.wq_sessions — pozri supabase-setup.sql
+const SESSIONS_TABLE = "wq_sessions";
 
-  function broadcast(data) {
-    if (ws?.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({
-      topic: `realtime:brief-${sessionId}`,
-      event: "broadcast",
-      payload: { type: "brief_update", data },
-      ref: "2",
+// Načíta uložený brief session; null ak neexistuje / DB nedostupná.
+export async function dbLoadSession(sessionId) {
+  if (!supabase || !sessionId) return null;
+  try {
+    const { data, error } = await supabase
+      .from(SESSIONS_TABLE)
+      .select("brief")
+      .eq("id", sessionId)
+      .maybeSingle();
+    if (error) { console.warn("[WebQuote] dbLoadSession:", error.message); return null; }
+    return data?.brief ?? null;
+  } catch (e) { console.warn("[WebQuote] dbLoadSession:", e); return null; }
+}
+
+// Uloží (upsert) brief session. Vráti true pri úspechu.
+export async function dbSaveSession(sessionId, brief) {
+  if (!supabase || !sessionId) return false;
+  try {
+    const { error } = await supabase.from(SESSIONS_TABLE).upsert({
+      id: sessionId,
+      name: brief?.projectName || null,
+      brief,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) { console.warn("[WebQuote] dbSaveSession:", error.message); return false; }
+    return true;
+  } catch (e) { console.warn("[WebQuote] dbSaveSession:", e); return false; }
+}
+
+// Zoznam všetkých sessions (pre admin prehľad projektov).
+export async function dbListSessions() {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from(SESSIONS_TABLE)
+      .select("id, name, updated_at")
+      .order("updated_at", { ascending: false });
+    if (error) { console.warn("[WebQuote] dbListSessions:", error.message); return null; }
+    return (data || []).map(r => ({
+      id: r.id,
+      name: r.name || "Bez názvu",
+      updatedAt: r.updated_at ? Date.parse(r.updated_at) : 0,
     }));
-  }
+  } catch (e) { console.warn("[WebQuote] dbListSessions:", e); return null; }
+}
 
-  function destroy() {
-    dead = true;
-    clearInterval(heartbeat);
-    clearTimeout(reconnectTimer);
-    ws?.close();
-  }
+// Zmaže session z databázy.
+export async function dbDeleteSession(sessionId) {
+  if (!supabase || !sessionId) return false;
+  try {
+    const { error } = await supabase.from(SESSIONS_TABLE).delete().eq("id", sessionId);
+    if (error) { console.warn("[WebQuote] dbDeleteSession:", error.message); return false; }
+    return true;
+  } catch (e) { console.warn("[WebQuote] dbDeleteSession:", e); return false; }
+}
 
-  connect();
-  return { broadcast, destroy };
+// Premenuje session ID (slug v URL). Vráti false pri kolízii/chybe.
+export async function dbRenameSession(oldId, newId) {
+  if (!supabase || !oldId || !newId) return false;
+  if (oldId === newId) return true;
+  try {
+    // kolízia?
+    const { data: existing } = await supabase
+      .from(SESSIONS_TABLE).select("id").eq("id", newId).maybeSingle();
+    if (existing) return false;
+    const { error } = await supabase
+      .from(SESSIONS_TABLE).update({ id: newId }).eq("id", oldId);
+    if (error) { console.warn("[WebQuote] dbRenameSession:", error.message); return false; }
+    return true;
+  } catch (e) { console.warn("[WebQuote] dbRenameSession:", e); return false; }
 }
 
 
@@ -664,12 +713,12 @@ const SK_CITIES = [
 // ── LOGO placements (odporúčané veľkosti) ──────────────────
 // ── TECHNICKÉ POŽIADAVKY ────────────────────────────────────
 const HOSTING_OPTIONS = [
-  { id:"volt",     label:"Volt Hosting",     desc:"Hosting spravovaný cez MediaVolt" },
+  { id:"volt",     label:"WebQuote Hosting", desc:"Hosting spravovaný cez MediaVolt" },
   { id:"existing", label:"Existujúci hosting", desc:"Klient má vlastný hosting — len nasadiť" },
 ];
 const CMS_OPTIONS = [
   { id:"none",      label:"Bez CMS",          desc:"Statický web, obsah sa mení priamo v kóde" },
-  { id:"voltadmin", label:"Volt Admin",       desc:"MediaVolt administračný systém pre správu obsahu webu" },
+  { id:"voltadmin", label:"WebQuote Admin",   desc:"MediaVolt administračný systém pre správu obsahu webu" },
   { id:"servicemanager", label:"Service Manager", desc:"Interný systém pre komplexnú správu prevádzok" },
   { id:"custom",    label:"Custom Admin",     desc:"Vlastný administračný systém na mieru" },
 ];
@@ -1208,7 +1257,7 @@ ${(b.techIntegrations||[]).length ? b.techIntegrations.map(id=>{
 - [ ] Presmerovať doménu na hosting
 
 ---
-*Vygenerované cez MediaVolt Web Builder*
+*Vygenerované cez [WebQuote](https://mediavolt.org) by MediaVolt*
 `;
 }
 
@@ -1290,8 +1339,8 @@ const PRELAUNCH_CHECKLIST_ITEMS = [
 function generateHumansTxt(b) {
   const today = new Date().toLocaleDateString("sk-SK");
   return `/* TEAM */
-Agentúra: MediaVolt AI
-Web: https://mediavolt.sk
+Agentúra: MediaVolt
+Web: https://mediavolt.org
 Lokalita: Bratislava, Slovensko
 
 /* PROJEKT */
@@ -2115,7 +2164,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
 
       {/* Header */}
       <div style={S.header}>
-        <span style={S.logo}>{isAdmin ? "⬡ MediaVolt Admin" : "📋 "+(brief.projectName||"Nový projekt")}</span>
+        <span style={S.logo}>{isAdmin ? "⚡ WebQuote Admin" : "⚡ "+(brief.projectName||"Nový projekt")}</span>
         {isAdmin && <span style={S.adminBadge}>ADMIN</span>}
         <div style={S.hRight}>
           <div style={S.live}><div style={S.liveDot}/>Live</div>

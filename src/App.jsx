@@ -9,10 +9,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   BuilderView,
-  getRole,
-  getSessionId,
   DEFAULT_BRIEF,
   createRealtimeChannel,
+  hasSupabase,
+  dbLoadSession,
+  dbSaveSession,
+  dbListSessions,
+  dbDeleteSession,
+  dbRenameSession,
 } from "./builder.jsx";
 
 // ─── MediaVolt / WebQuote brand tokens ───────────────────────
@@ -35,10 +39,9 @@ const MV = {
   fontMono:    "'JetBrains Mono', monospace",
 };
 
-// ─── ADMIN PROJEKTY (localStorage register) ───────────────────
-// Builder nemá vlastnú DB tabuľku pre zoznam projektov (iba
-// realtime broadcast cez Supabase), preto zoznam projektov, ktoré
-// admin otvoril/vytvoril, držíme v localStorage prehliadača admina.
+// ─── ADMIN PROJEKTY ───────────────────────────────────────────
+// Primárny zdroj = Supabase tabuľka wq_sessions (pozri supabase-setup.sql).
+// localStorage slúži len ako fallback, keď Supabase nie je nakonfigurovaný.
 const PROJECTS_KEY = "wq_admin_projects";
 
 function slugify(str) {
@@ -102,8 +105,8 @@ function generateRandomId() {
   return Math.random().toString(36).slice(2, 8).toLowerCase();
 }
 
-function uniqueSlug(base) {
-  const existing = new Set(loadProjects().map(p => p.id));
+function uniqueSlug(base, existingIds) {
+  const existing = new Set(existingIds ?? loadProjects().map(p => p.id));
   let slug = slugify(base) || generateRandomId();
   if (!existing.has(slug)) return slug;
   let i = 2;
@@ -307,34 +310,65 @@ function PoweredByBadge() {
 // ─── ADMIN HOME (zoznam projektov) ─────────────────────────────
 function AdminHome() {
   const [projects, setProjects] = useState(() => loadProjects());
+  const [loading, setLoading] = useState(hasSupabase);
   const [renamingId, setRenamingId] = useState(null);
   const [renameVal, setRenameVal] = useState("");
   const [renameErr, setRenameErr] = useState(false);
 
-  const refresh = () => setProjects(loadProjects());
+  const refresh = useCallback(async () => {
+    if (hasSupabase) {
+      const rows = await dbListSessions();
+      if (rows) {
+        setProjects(rows);
+        // zosynchronizuj lokálny fallback register s DB
+        const obj = {};
+        rows.forEach(r => { obj[r.id] = { name: r.name, updatedAt: r.updatedAt }; });
+        saveProjectsObj(obj);
+      } else {
+        setProjects(loadProjects()); // DB nedostupná — fallback
+      }
+    } else {
+      setProjects(loadProjects());
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
 
   const openProject = (id) => { window.location.href = `/admin?session=${id}`; };
 
-  const createProject = () => {
+  const createProject = async () => {
     const name = window.prompt("Názov nového projektu:", "");
     if (name === null) return; // zrušené
-    const slug = uniqueSlug(name || "novy-projekt");
-    upsertProject(slug, name?.trim() || "Bez názvu");
+    const slug = uniqueSlug(name || "novy-projekt", projects.map(p => p.id));
+    const displayName = name?.trim() || "Bez názvu";
+    upsertProject(slug, displayName);
+    if (hasSupabase) {
+      await dbSaveSession(slug, { ...DEFAULT_BRIEF, projectName: displayName });
+    }
     window.location.href = `/admin?session=${slug}`;
   };
 
   const startRename = (p) => { setRenamingId(p.id); setRenameVal(p.id); setRenameErr(false); };
 
-  const confirmRename = (oldId) => {
+  const confirmRename = async (oldId) => {
     const newSlug = slugify(renameVal) || oldId;
-    const ok = renameProjectId(oldId, newSlug);
-    if (!ok) { setRenameErr(true); return; }
+    if (newSlug === oldId) { setRenamingId(null); return; }
+    if (hasSupabase) {
+      const ok = await dbRenameSession(oldId, newSlug);
+      if (!ok) { setRenameErr(true); return; }
+    }
+    renameProjectId(oldId, newSlug);
     setRenamingId(null);
     refresh();
   };
 
-  const deleteProject = (p) => {
-    if (!window.confirm(`Naozaj zmazať projekt "${p.name}" zo zoznamu?\n\n(Toto zmaže iba záznam v admin zozname, nie dáta projektu — tie žijú v session linku.)`)) return;
+  const deleteProject = async (p) => {
+    const msg = hasSupabase
+      ? `Naozaj zmazať projekt "${p.name}"?\n\nToto natrvalo zmaže aj uložené dáta projektu z databázy.`
+      : `Naozaj zmazať projekt "${p.name}" zo zoznamu?`;
+    if (!window.confirm(msg)) return;
+    if (hasSupabase) await dbDeleteSession(p.id);
     removeProject(p.id);
     refresh();
   };
@@ -386,8 +420,28 @@ function AdminHome() {
           </button>
         </div>
 
+        {/* Upozornenie ak chýba databáza */}
+        {!hasSupabase && (
+          <div style={{
+            marginBottom:"1rem", padding:"0.6rem 0.9rem",
+            background:"#ffb02012", border:"1px solid #ffb02040", borderRadius:10,
+            color:MV.amber, fontSize:"0.72rem", fontFamily:MV.fontMono, letterSpacing:"0.03em",
+          }}>
+            ⚠ Supabase nie je nakonfigurovaný — projekty sa ukladajú len lokálne v tomto prehliadači.
+            Doplň VITE_SUPABASE_URL a VITE_SUPABASE_ANON_KEY do .env a spusti supabase-setup.sql.
+          </div>
+        )}
+
         {/* Zoznam projektov */}
-        {projects.length === 0 ? (
+        {loading ? (
+          <div style={{
+            border:`1px dashed ${MV.borderHi}`, borderRadius:14,
+            padding:"3rem 1.5rem", textAlign:"center",
+            color:MV.muted, fontSize:"0.8rem", fontFamily:MV.fontMono,
+          }}>
+            Načítavam projekty z databázy…
+          </div>
+        ) : projects.length === 0 ? (
           <div style={{
             border:`1px dashed ${MV.borderHi}`, borderRadius:14,
             padding:"3rem 1.5rem", textAlign:"center",
@@ -494,12 +548,18 @@ function AdminFlowPanel({ sessionId, projectName }) {
 
   const startRename = () => { setRenameVal(sessionId); setRenameErr(false); setRenaming(true); };
 
-  const confirmRename = () => {
+  const confirmRename = async () => {
     const newSlug = slugify(renameVal);
     if (!newSlug) { setRenameErr(true); return; }
     if (newSlug === sessionId) { setRenaming(false); return; }
-    const ok = renameProjectId(sessionId, newSlug);
-    if (!ok) { setRenameErr(true); return; }
+    if (hasSupabase) {
+      const ok = await dbRenameSession(sessionId, newSlug);
+      if (!ok) { setRenameErr(true); return; }
+      renameProjectId(sessionId, newSlug); // zosynchronizuj lokálny register
+    } else {
+      const ok = renameProjectId(sessionId, newSlug);
+      if (!ok) { setRenameErr(true); return; }
+    }
     // presmeruj na rovnaký projekt pod novým URL
     window.location.href = `/admin?session=${newSlug}`;
   };
@@ -722,55 +782,128 @@ function AdminFlowPanel({ sessionId, projectName }) {
   );
 }
 
-// ─── ROOT ─────────────────────────────────────────────────────
-export default function App() {
-  // Admin je VÝHRADNE na /admin ceste — klient na / nikdy nevie že admin existuje
-  const isAdmin = window.location.pathname.startsWith("/admin");
-  const sessionParam = new URLSearchParams(window.location.search).get("session");
+// ─── SAVE BADGE (stav ukladania do databázy) ──────────────────
+function SaveBadge({ state }) {
+  if (!hasSupabase || state === "idle") return null;
+  const cfg = {
+    saving: { txt: "● Ukladám…",         color: MV.amber,  },
+    saved:  { txt: "✓ Uložené",           color: MV.green,  },
+    error:  { txt: "✕ Chyba ukladania",   color: "#f87171", },
+  }[state];
+  if (!cfg) return null;
+  return (
+    <div style={{
+      position:"fixed", bottom:12, left:12, zIndex:9999,
+      padding:"0.3rem 0.7rem", borderRadius:20,
+      background:`${MV.bg}ee`, border:`1px solid ${cfg.color}50`,
+      color:cfg.color, fontFamily:MV.fontMono, fontSize:"0.62rem",
+      letterSpacing:"0.06em", backdropFilter:"blur(8px)",
+      transition:"all .2s",
+    }}>
+      {cfg.txt}
+    </div>
+  );
+}
 
-  // Admin bez ?session= → zoznam projektov (úvod), nie rovno builder
-  if (isAdmin && !sessionParam) {
-    return <AdminGate><AdminHome /></AdminGate>;
-  }
+// ─── LOADER (kým sa načíta session z databázy) ────────────────
+function SessionLoader() {
+  return (
+    <div style={{
+      minHeight:"100vh", background:MV.bg,
+      display:"flex", alignItems:"center", justifyContent:"center",
+      flexDirection:"column", gap:"1rem", fontFamily:MV.fontBody,
+    }}>
+      <style>{`@keyframes wq-spin { to { transform:rotate(360deg) } }`}</style>
+      <div style={{
+        width:36, height:36, borderRadius:"50%",
+        border:`3px solid ${MV.border}`, borderTopColor:MV.orange,
+        animation:"wq-spin .8s linear infinite",
+      }}/>
+      <div style={{fontFamily:MV.fontMono, fontSize:"0.65rem", color:MV.muted, letterSpacing:"0.1em"}}>
+        NAČÍTAVAM PROJEKT…
+      </div>
+    </div>
+  );
+}
 
-  const sessionId = sessionParam || getSessionId();
+// ─── SESSION APP (builder pre konkrétnu session) ──────────────
+function SessionApp({ sessionId, isAdmin }) {
+  const [brief, setBrief]         = useState(DEFAULT_BRIEF);
+  const [theme, setTheme]         = useState("dark");
+  const [loaded, setLoaded]       = useState(!hasSupabase);
+  const [saveState, setSaveState] = useState("idle");
+  const channelRef   = useRef(null);
+  const dirtyRef     = useRef(false);   // true = posledná zmena briefu je lokálna (treba broadcast + save)
+  const saveTimerRef = useRef(null);
+  const briefRef     = useRef(brief);
+  useEffect(() => { briefRef.current = brief; }, [brief]);
 
-  // Ak nie je session link ani /admin cesta → presmerovanie na admin login
-  if (!isAdmin && !sessionId) {
-    window.location.replace("/admin");
-    return null;
-  }
-
-  const [brief, setBrief] = useState(DEFAULT_BRIEF);
-  const [theme, setTheme] = useState("dark");
-  const channelRef = useRef(null);
-
-  // Supabase realtime: admin broadcastuje, klient prijíma
+  // 1) Načítaj uložený brief z databázy (perzistencia sessions)
   useEffect(() => {
-    const supaUrl = import.meta.env.VITE_SUPABASE_URL || "";
-    if (!supaUrl || supaUrl.includes("YOUR_PROJECT")) return;
+    if (!hasSupabase) return;
+    let alive = true;
+    dbLoadSession(sessionId).then(saved => {
+      if (!alive) return;
+      if (saved) setBrief({ ...DEFAULT_BRIEF, ...saved });
+      setLoaded(true);
+    });
+    return () => { alive = false; };
+  }, [sessionId]);
+
+  // 2) Realtime kanál — obojsmerný sync admin ↔ klient
+  //    (echo vlastných správ je potlačené cez TAB_ID v builder.jsx)
+  useEffect(() => {
+    if (!hasSupabase) return;
     const channel = createRealtimeChannel(sessionId, (data) => {
-      if (!isAdmin) setBrief(prev => ({ ...prev, ...data }));
+      setBrief(prev => ({ ...prev, ...data }));
     });
     channelRef.current = channel;
     return () => { channel.destroy(); channelRef.current = null; };
-  }, [sessionId, isAdmin]);
+  }, [sessionId]);
 
-  // Admin: zaregistruj/aktualizuj projekt v lokálnom zozname (úvod /admin)
-  // vždy keď sa zmení názov projektu, nech sa zoznam drží aktuálny.
+  // 3) Po lokálnej zmene: broadcast hneď + autosave do DB (debounce 800 ms)
   useEffect(() => {
-    if (isAdmin) upsertProject(sessionId, brief.projectName || "Bez názvu");
-  }, [isAdmin, sessionId, brief.projectName]);
+    if (!loaded || !dirtyRef.current) return;
+    dirtyRef.current = false;
+    channelRef.current?.broadcast(brief);
+    if (!hasSupabase) return;
+    setSaveState("saving");
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      saveTimerRef.current = null;
+      const ok = await dbSaveSession(sessionId, briefRef.current);
+      setSaveState(ok ? "saved" : "error");
+    }, 800);
+  }, [brief, loaded, sessionId]);
+
+  // 4) Flush — ulož rozpracované zmeny pri skrytí/zatvorení okna
+  useEffect(() => {
+    if (!hasSupabase) return;
+    const flush = () => {
+      if (document.visibilityState === "hidden" && saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        dbSaveSession(sessionId, briefRef.current);
+      }
+    };
+    document.addEventListener("visibilitychange", flush);
+    return () => document.removeEventListener("visibilitychange", flush);
+  }, [sessionId]);
+
+  // 5) Admin: zaregistruj/aktualizuj projekt v lokálnom fallback zozname
+  useEffect(() => {
+    if (isAdmin && loaded) upsertProject(sessionId, brief.projectName || "Bez názvu");
+  }, [isAdmin, sessionId, brief.projectName, loaded]);
 
   const handleBriefChange = useCallback((patch) => {
-    setBrief(prev => {
-      const next = { ...prev, ...patch };
-      if (isAdmin && channelRef.current) channelRef.current.broadcast(next);
-      return next;
-    });
-  }, [isAdmin]);
+    dirtyRef.current = true;
+    setBrief(prev => ({ ...prev, ...patch }));
+  }, []);
 
-  const inner = (
+  // Kým sa nenačíta uložený stav, needituj — inak by load prepísal zmeny
+  if (!loaded) return <SessionLoader />;
+
+  return (
     <>
       {/* Globálne štýly */}
       <style>{`
@@ -803,10 +936,29 @@ export default function App() {
         />
       </div>
 
+      <SaveBadge state={saveState} />
       <PoweredByBadge />
     </>
   );
+}
 
-  if (isAdmin) return <AdminGate>{inner}</AdminGate>;
-  return inner;
+// ─── ROOT ─────────────────────────────────────────────────────
+export default function App() {
+  // Admin je VÝHRADNE na /admin ceste — klient na / nikdy nevie že admin existuje
+  const isAdmin = window.location.pathname.startsWith("/admin");
+  const sessionParam = new URLSearchParams(window.location.search).get("session");
+
+  // Admin bez ?session= → zoznam projektov (úvod), nie rovno builder
+  if (isAdmin && !sessionParam) {
+    return <AdminGate><AdminHome /></AdminGate>;
+  }
+
+  // Bez session linku → presmerovanie na admin login
+  if (!sessionParam) {
+    window.location.replace("/admin");
+    return null;
+  }
+
+  const app = <SessionApp sessionId={sessionParam} isAdmin={isAdmin} />;
+  return isAdmin ? <AdminGate>{app}</AdminGate> : app;
 }
