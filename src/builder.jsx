@@ -1,5 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { getIndustryExtras, INDUSTRY_SECTION_PRESETS } from "./industryData.js";
+import { LANGS, tr, localizeSections, localizeAccordion, localizeWebTypes, localizeIndustries, extraLabel } from "./i18n.js";
+import { generateProPrompt } from "./promptGen.js";
+import MiniWebPreview from "./WebPreview.jsx";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────
 // Credentials z Supabase → Settings → API (cez .env)
@@ -155,7 +159,7 @@ function ThemeToggle({ theme, setTheme }) {
 
 // ─── DATA ─────────────────────────────────────────────────
 
-const WEB_TYPES = [
+const WEB_TYPES_BASE = [
   { id:"landing",   label:"Landing",   icon:"⚡", desc:"Jeden cieľ, jedna stránka" },
   { id:"corporate", label:"Firemný",   icon:"🏢", desc:"Viac sekcií, o nás, kontakt" },
   { id:"ecommerce", label:"E-shop",    icon:"🛒", desc:"Produkty, košík, checkout" },
@@ -163,7 +167,7 @@ const WEB_TYPES = [
 ];
 
 // ── INDUSTRIES ─────────────────────────────────────────────
-const INDUSTRIES = [
+const INDUSTRIES_BASE = [
   {
     id:"automotive", label:"Automotive", icon:"🚗",
     subs:[
@@ -354,7 +358,7 @@ const INDUSTRIES = [
 ];
 
 // ── SECTIONS ────────────────────────────────────────────────
-const SECTIONS = [
+const SECTIONS_BASE = [
   // CORE
   { id:"nav",          label:"Navigácia",          icon:"☰",  cat:"core",    desc:"Hlavné menu s logom, hamburger pre mobil, sticky efekt pri scrolle. Základ každej stránky.", note:"" },
   { id:"hero",         label:"Hero",               icon:"🖼", cat:"core",    desc:"Prvá vec ktorú návštevník vidí — veľký nadpis, podnadpis, primárny CTA button a vizuál alebo video.", note:"" },
@@ -839,8 +843,8 @@ const MENU_ITEMS = [
 ];
 
 const DEFAULT_BRIEF = {
-  projectName:"", webType:"landing",
-  industry:"", industrySubcat:"", industryNote:"",
+  projectName:"", webType:"landing", lang:"sk",
+  industry:"", industrySubcat:"", industryNote:"", industryExtras:[],
   companyName:"", ico:"", dic:"", icdph:"",
   phone:"", email:"", web:"",
   addresses: [makeAddress("headquarters")],
@@ -863,20 +867,11 @@ const DEFAULT_BRIEF = {
 };
 
 // ─── GENERATORS ───────────────────────────────────────────
+// Prompt generátor je v src/promptGen.js (generateProPrompt) —
+// profesionálna ready-to-go špecifikácia pre AI web buildery.
 
+/* legacy generatePrompt — nahradený generateProPrompt
 function generatePrompt(b) {
-  const typeLabel = WEB_TYPES.find(t => t.id === b.webType)?.label || b.webType;
-  const sectionList = b.sections.map(id => {
-    const s = SECTIONS.find(s => s.id === id);
-    const note = (b.sectionNotes||{})[id];
-    return `- ${s?.icon} ${s?.label} — ${s?.desc}${note?`\n    ↳ Poznámka klienta: ${note}`:""}`;
-  }).join("\n");
-
-  const addrLines = (b.addresses||[]).map(a => {
-    const t = ADDRESS_TYPES.find(at=>at.id===a.type)?.label||a.type;
-    return `- ${t}: ${[a.street,a.zip,a.city,a.country].filter(Boolean).join(", ")||"—"}`;
-  }).join("\n");
-
   return `# Web Development Brief — ${b.projectName || "Bez názvu"}
 
 ## Základné informácie
@@ -957,12 +952,13 @@ ${sectionList}
 ## Výstup
 Kompletný React JSX súbor — všetky sekcie implementované s reálnym obsahom, bez TODO komentárov.`;
 }
+legacy end */
 
 function generateCode(b) {
   const name = (b.projectName || "MyProject").replace(/[^a-zA-Z0-9]/g, "") || "MyProject";
-  const typeLabel = WEB_TYPES.find(t => t.id === b.webType)?.label || b.webType;
+  const typeLabel = WEB_TYPES_BASE.find(t => t.id === b.webType)?.label || b.webType;
   const blocks = b.sections.map(id => {
-    const s = SECTIONS.find(s => s.id === id);
+    const s = SECTIONS_BASE.find(s => s.id === id);
     return `\n  {/* ══ ${s?.label} — ${s?.desc} ══ */}\n  <section id="${id}" style={{padding:"var(--sp-96) 0"}}>\n    <div className="container">{/* TODO */}</div>\n  </section>`;
   }).join("\n");
 
@@ -1210,7 +1206,7 @@ function generateReadme(b) {
   const domain = (b.domains && b.domains.find(d=>d.trim())) || "—";
   const today = new Date().toLocaleDateString("sk-SK");
   const sectionList = (b.sections||[]).map(id=>{
-    const s = SECTIONS.find(x=>x.id===id);
+    const s = SECTIONS_BASE.find(x=>x.id===id);
     return s ? `- ${s.label}` : null;
   }).filter(Boolean).join("\n");
 
@@ -1223,7 +1219,7 @@ Odovzdávacia dokumentácia projektu. Vygenerované: ${today}
 - **IČO:** ${b.ico || "—"}
 - **Kontakt:** ${b.email || "—"} / ${b.phone || "—"}
 - **Doména:** ${domain}
-- **Odvetvie:** ${INDUSTRIES.find(i=>i.id===b.industry)?.label || "—"}
+- **Odvetvie:** ${INDUSTRIES_BASE.find(i=>i.id===b.industry)?.label || "—"}
 
 ## Technické info
 - **Hosting:** ${HOSTING_OPTIONS.find(h=>h.id===b.techHosting)?.label || "—"}${b.techHostingNote?` (${b.techHostingNote})`:""}
@@ -1373,7 +1369,10 @@ function getSessionId() {
 
 // ─── UNIFIED BUILDER VIEW (client + admin) ────────────────
 
-const ACCORDION = [
+// Sub-sekcie skryté v jednoduchom režime (UI pre laikov)
+const SIMPLE_HIDDEN = ["info-details","brand-colors","brand-fonts","brief-structure","brief-nav","content-social","content-extra"];
+
+const ACCORDION_BASE = [
   {
     id:"info", label:"Základné info o projekte", icon:"🏢",
     subs:[
@@ -1428,6 +1427,22 @@ const WF_SECTIONS = {
 const NEUTRAL_SECS = ["nav","footer","logos","stats","cookies","scrolltop","darkmode","loader","search"];
 
 export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin }) {
+  // ── i18n: lokalizované dátové zdroje podľa jazyka briefu ──
+  const lang = brief.lang || "sk";
+  const SECTIONS   = useMemo(() => localizeSections(SECTIONS_BASE, lang), [lang]);
+  const ACCORDION  = useMemo(() => localizeAccordion(ACCORDION_BASE, lang), [lang]);
+  const INDUSTRIES = useMemo(() => localizeIndustries(INDUSTRIES_BASE, lang), [lang]);
+  const WEB_TYPES  = useMemo(() => localizeWebTypes(WEB_TYPES_BASE, lang), [lang]);
+  const T = (k) => tr(lang, k);
+
+  // ── jednoduchý / expert režim (lokálna voľba používateľa) ──
+  const [uiMode, setUiModeRaw] = useState(() => {
+    try { return localStorage.getItem("wq_ui_mode") || (isAdmin ? "expert" : "simple"); }
+    catch { return isAdmin ? "expert" : "simple"; }
+  });
+  const setUiMode = (m) => { setUiModeRaw(m); try { localStorage.setItem("wq_ui_mode", m); } catch {} };
+  const simple = uiMode === "simple";
+
   const [activeSub, setActiveSub] = useState("info-project");
   const [openAcc, setOpenAcc]     = useState({ info:true, brand:false, brief:false, content:false });
   const [rightMode, setRightMode] = useState("wireframe"); // wireframe | prompt | code
@@ -1571,7 +1586,10 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   };
   const toggleAcc = (accId) => setOpenAcc(p => ({ ...p, [accId]:!p[accId] }));
 
-  const prompt = useMemo(()=>generatePrompt(brief),[JSON.stringify(brief)]);
+  const prompt = useMemo(()=>generateProPrompt(brief, {
+    SECTIONS: SECTIONS_BASE, WEB_TYPES: WEB_TYPES_BASE, INDUSTRIES: INDUSTRIES_BASE,
+    HOSTING_OPTIONS, CMS_OPTIONS, INTEGRATION_OPTIONS, ADDRESS_TYPES, LOGO_PLACEMENTS,
+  }),[JSON.stringify(brief)]);
 
   // ── Inteligentné fulltextové vyhľadávanie odvetví ──
   const normalize = (s) => (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
@@ -1782,6 +1800,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
     <div style={S.rModeRow}>
       <button style={S.rModeBtn(rightMode==="wireframe")} onClick={()=>setRightMode("wireframe")}>Náhľad</button>
       {isAdmin && <button style={S.rModeBtn(rightMode==="prompt")} onClick={()=>setRightMode("prompt")}>Prompt</button>}
+      {isAdmin && <button style={S.rModeBtn(rightMode==="webview")} onClick={()=>setRightMode("webview")}>{T("webPreview")}</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="code")} onClick={()=>setRightMode("code")}>Kód</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="notes")} onClick={()=>setRightMode("notes")}>Poznámky</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="tools")} onClick={()=>setRightMode("tools")}>Nástroje</button>}
@@ -1841,6 +1860,9 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
         <button style={S.copyBtn} onClick={copyOut}>{copied?"✓ Skopírované":"Kopírovať prompt"}</button>
         <div style={S.codeBox}>{prompt}</div>
       </>)}
+      {rightMode==="webview" && isAdmin && (
+        <MiniWebPreview brief={brief} sections={orderedSecs} note={T("previewNote")} />
+      )}
       {rightMode==="code" && isAdmin && (<>
         <button style={S.copyBtn} onClick={copyOut}>{copied?"✓ Skopírované":"Kopírovať kód"}</button>
         <div style={S.codeBox}>{code}</div>
@@ -2161,12 +2183,34 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   return (
     <div style={S.root}>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
+      {/* Jednoduchý režim — skryje pokročilé bloky formulára */}
+      {simple && <style>{SIMPLE_HIDDEN.map(id=>`#blk-${id}`).join(",")+"{display:none !important}"}</style>}
 
       {/* Header */}
       <div style={S.header}>
         <span style={S.logo}>{isAdmin ? "⚡ WebQuote Admin" : "⚡ "+(brief.projectName||"Nový projekt")}</span>
         {isAdmin && <span style={S.adminBadge}>ADMIN</span>}
         <div style={S.hRight}>
+          {/* Jazyk UI (SK/EN/CS/DE) — synchronizuje sa cez brief */}
+          <select value={lang} onChange={e=>update({lang:e.target.value})} title={T("language")}
+            style={{
+              background:c.inpBg, border:`1px solid ${c.border}`, color:c.text,
+              borderRadius:7, padding:"0.25rem 0.35rem", fontSize:"0.68rem",
+              cursor:"pointer", fontFamily:"inherit",
+            }}>
+            {LANGS.map(l=><option key={l.id} value={l.id}>{l.flag} {l.id.toUpperCase()}</option>)}
+          </select>
+          {/* Jednoduchý / expert režim */}
+          <button onClick={()=>setUiMode(simple?"expert":"simple")}
+            title={simple?T("expertMode"):T("simpleMode")}
+            style={{
+              background:simple?`${c.pri}18`:c.inpBg, border:`1px solid ${simple?c.pri:c.border}`,
+              color:simple?c.pri:c.muted, borderRadius:7, padding:"0.25rem 0.55rem",
+              fontSize:"0.65rem", fontWeight:700, cursor:"pointer", minHeight:"unset",
+              whiteSpace:"nowrap",
+            }}>
+            {simple ? "✨ "+T("simpleMode") : "⚙️ "+T("expertMode")}
+          </button>
           <div style={S.live}><div style={S.liveDot}/>Live</div>
           <ThemeToggle theme={theme} setTheme={setTheme}/>
           {!isMobile && <span style={S.badge}>#{sessionId}</span>}
@@ -2197,7 +2241,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                       {acc.label}
                       <span style={S.accChevron(openAcc[acc.id])}>▶</span>
                     </button>
-                    {openAcc[acc.id] && acc.subs.map(sub=>(
+                    {openAcc[acc.id] && acc.subs.filter(sub=>!simple||!SIMPLE_HIDDEN.includes(sub.id)).map(sub=>(
                       <button key={sub.id} style={S.subItem(activeSub===sub.id)}
                         onClick={()=>{
                           selectSub(acc.id, sub.id);
@@ -2310,7 +2354,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                       const sel=brief.industry===ind.id;
                       return (
                         <button key={ind.id}
-                          onClick={()=>{ update({industry:ind.id, industrySubcat:""}); setIndustryOpen(false); setIndustrySearch(""); }}
+                          onClick={()=>{ update({industry:ind.id, industrySubcat:"", industryExtras:[]}); setIndustryOpen(false); setIndustrySearch(""); }}
                           style={{
                             width:"100%",display:"flex",alignItems:"center",gap:"0.625rem",
                             padding:"0.55rem 0.75rem",cursor:"pointer",textAlign:"left",
@@ -2334,7 +2378,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                       return (
                         <div key={ind.id}>
                           <button
-                            onClick={()=>{ update({industry:ind.id, industrySubcat:""}); setIndustryOpen(false); setIndustrySearch(""); }}
+                            onClick={()=>{ update({industry:ind.id, industrySubcat:"", industryExtras:[]}); setIndustryOpen(false); setIndustrySearch(""); }}
                             style={{
                               width:"100%",display:"flex",alignItems:"center",gap:"0.625rem",
                               padding:"0.5rem 0.75rem",cursor:"pointer",textAlign:"left",
@@ -2347,7 +2391,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                           </button>
                           {!ind.groupMatch && ind.matchedSubs.map(sub=>(
                             <button key={sub.id}
-                              onClick={()=>{ update({industry:ind.id, industrySubcat:sub.id}); setIndustryOpen(false); setIndustrySearch(""); }}
+                              onClick={()=>{ update({industry:ind.id, industrySubcat:sub.id, industryExtras:[]}); setIndustryOpen(false); setIndustrySearch(""); }}
                               style={{
                                 width:"100%",display:"flex",alignItems:"center",gap:"0.5rem",
                                 padding:"0.4rem 0.75rem 0.4rem 2.25rem",cursor:"pointer",textAlign:"left",
@@ -2375,7 +2419,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                   <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"0.375rem"}}>
                     {ind.subs.map(sub=>(
                       <button key={sub.id}
-                        onClick={()=>update({industrySubcat:sub.id})}
+                        onClick={()=>update({industrySubcat:sub.id, industryExtras:[]})}
                         style={{
                           padding:"0.5rem 0.625rem", borderRadius:8, textAlign:"left",
                           border:`1.5px solid ${brief.industrySubcat===sub.id?c.pri:c.border}`,
@@ -2400,6 +2444,55 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                   value={brief.industryNote||""} onChange={e=>update({industryNote:e.target.value})}/>
               </div>
             )}
+
+            {/* ── Adaptívny výber podľa odvetvia (napr. oblasti práva) ── */}
+            {brief.industry && (()=>{
+              const ex = getIndustryExtras(brief.industry, brief.industrySubcat);
+              const preset = INDUSTRY_SECTION_PRESETS[brief.industry];
+              if (!ex && !preset) return null;
+              const selected = brief.industryExtras || [];
+              return (
+                <>
+                  {ex && (
+                    <div style={{marginTop:"0.875rem"}}>
+                      <label style={S.lbl}>{lang==="sk" ? ex.title : (ex.en || ex.title)}</label>
+                      <div style={{fontSize:"0.62rem", color:c.muted, margin:"0.15rem 0 0.5rem"}}>{T("extrasHint")}</div>
+                      <div style={{display:"flex", flexWrap:"wrap", gap:"0.4rem"}}>
+                        {ex.options.map(o=>{
+                          const on = selected.includes(o.id);
+                          return (
+                            <button key={o.id}
+                              onClick={()=>update({industryExtras: on ? selected.filter(x=>x!==o.id) : [...selected, o.id]})}
+                              style={{
+                                padding:"0.35rem 0.7rem", borderRadius:20, cursor:"pointer", minHeight:"unset",
+                                fontSize:"0.68rem", fontWeight:600, transition:"all .15s",
+                                border:`1.5px solid ${on?c.pri:c.border}`,
+                                background:on?`${c.pri}18`:c.inpBg,
+                                color:on?c.pri:c.muted,
+                              }}>
+                              {on ? "✓ " : ""}{extraLabel(o, lang)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {preset && (
+                    <div style={{marginTop:"0.75rem", display:"flex", alignItems:"center", gap:"0.5rem", flexWrap:"wrap"}}>
+                      <span style={{fontSize:"0.62rem", color:c.muted}}>{T("recommended")}:</span>
+                      <button onClick={()=>update({sections:[...preset]})}
+                        style={{
+                          padding:"0.3rem 0.7rem", borderRadius:7, cursor:"pointer", minHeight:"unset",
+                          fontSize:"0.65rem", fontWeight:700,
+                          border:`1.5px solid ${c.pri}`, background:`${c.pri}14`, color:c.pri,
+                        }}>
+                        {JSON.stringify(brief.sections)===JSON.stringify(preset) ? T("applied") : `${T("useRecommended")} (${preset.length})`}
+                      </button>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {/* ── PROJEKT ── */}
