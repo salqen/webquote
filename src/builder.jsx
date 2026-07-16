@@ -125,37 +125,14 @@ export async function dbRenameSession(oldId, newId) {
 
 
 // ─── THEME ────────────────────────────────────────────────
-const THEMES = {
-  dark: {
-    bg:"#05060d", panel:"#0c0d1a", card:"#12142a",
-    border:"#1a1c35", text:"#e8eef5", muted:"#5a6080", subtle:"#1a1c35",
-    inpBg:"#0c0d1a", cardActive:"#12142a", codeBg:"#05060d", codeText:"#ff6a00", checkbox:"#ff6a00", desc:"#5a6080",
-  },
-  light: {
-    bg:"#f8f6f2", panel:"#f0ede8", card:"#e8e4df",
-    border:"#d5d0ca", text:"#1a1a1a", muted:"#888", subtle:"#ccc",
-    inpBg:"#f4f1ec", cardActive:"#ebe7e1", codeBg:"#eeeae4", codeText:"#2d6e3e", checkbox:"#888", desc:"#6a6a6a",
-  },
+// Fixná MediaVolt paleta — teplá tmavá (volt orange #ff6a00).
+// UI appky sa už NEprefarbuje podľa vybratej farebnej témy briefu.
+const MV_THEME = {
+  bg:"#0a0604", panel:"#120b07", card:"#1a1009",
+  border:"#2a1d12", text:"#f4ece6", muted:"#8f8378", subtle:"#2a1d12",
+  inpBg:"#120b07", cardActive:"#22150c", codeBg:"#0a0604", codeText:"#ff9540", checkbox:"#ff6a00", desc:"#6f6459",
 };
-
-function ThemeToggle({ theme, setTheme }) {
-  const isDark = theme === "dark";
-  return (
-    <button
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      title={isDark ? "Svetlá téma" : "Tmavá téma"}
-      style={{
-        background:"transparent",
-        border:`1px solid ${isDark?"#2a2a2a":"#d5d0ca"}`,
-        borderRadius:8, padding:"0.3rem 0.625rem", cursor:"pointer",
-        fontSize:"0.85rem", display:"flex", alignItems:"center", gap:"0.375rem",
-        color:isDark?"#888":"#666", transition:"all .15s", minHeight:"unset",
-      }}>
-      {isDark ? "☀️" : "🌙"}
-      <span style={{fontSize:"0.68rem",fontWeight:500}}>{isDark?"Svetlá":"Tmavá"}</span>
-    </button>
-  );
-}
+const THEMES = { dark: MV_THEME, light: MV_THEME };
 
 // ─── DATA ─────────────────────────────────────────────────
 
@@ -457,6 +434,29 @@ const HERO_STYLES = [
   { id:"info",    label:"Informačný",      icon:"📄", desc:"Hutný hero s viacerými info blokmi, vhodný pre B2B/služby" },
   { id:"sales",   label:"Predajný",        icon:"🎯", desc:"Silný value proposition, social proof, urgentné CTA" },
 ];
+// ── SLIDERY pre hero carousel (src/sliders — z priečinka SLIDERS) ──
+// HTML sa importuje ako text a vkladá cez iframe srcDoc — žiadna HTTP požiadavka,
+// takže X-Frame-Options: DENY v hlavičkách hostingu náhľady neblokuje.
+import sliderFadeHtml      from "./sliders/slider-1-fade.html?raw";
+import sliderSlideHtml     from "./sliders/slider-2-slide.html?raw";
+import sliderCoverflowHtml from "./sliders/slider-3-coverflow.html?raw";
+import sliderKenburnsHtml  from "./sliders/slider-4-kenburns.html?raw";
+import sliderCubeHtml      from "./sliders/slider-5-cube.html?raw";
+import sliderSplitHtml     from "./sliders/slider-6-split.html?raw";
+import sliderCircleHtml    from "./sliders/slider-7-circle.html?raw";
+import sliderCardsHtml     from "./sliders/slider-8-cards.html?raw";
+
+const SLIDER_OPTIONS = [
+  { id:"fade",      label:"Fade / Cross-dissolve", html:sliderFadeHtml,      desc:"Jemné prelínanie slidov" },
+  { id:"slide",     label:"Slide",                 html:sliderSlideHtml,     desc:"Klasický horizontálny posun" },
+  { id:"coverflow", label:"Coverflow",             html:sliderCoverflowHtml, desc:"3D coverflow efekt (Apple štýl)" },
+  { id:"kenburns",  label:"Ken Burns",             html:sliderKenburnsHtml,  desc:"Pomalý zoom a posun obrazu" },
+  { id:"cube",      label:"Cube",                  html:sliderCubeHtml,      desc:"3D rotácia kocky" },
+  { id:"split",     label:"Split",                 html:sliderSplitHtml,     desc:"Rozdelený prechod na polovice" },
+  { id:"circle",    label:"Circle reveal",         html:sliderCircleHtml,    desc:"Kruhové odhalenie slidu" },
+  { id:"cards",     label:"Cards / Stack",         html:sliderCardsHtml,     desc:"Karty ukladané na seba" },
+];
+
 const HERO_MEDIA = [
   { id:"none",    label:"Bez média",     icon:"—",  desc:"Len text a pozadie / gradient" },
   { id:"image",   label:"Obrázok",       icon:"🖼", desc:"Statický vizuál / fotka na pozadí alebo vedľa textu" },
@@ -871,7 +871,7 @@ const DEFAULT_BRIEF = {
   colorTheme:"dark", themeToggle:"no",
   navBehavior:"sticky", navBackground:"solid", navLayout:"top", navLogo:"left",
   navAlwaysHamburger:false, navSocials:false,
-  heroStyle:"minimal", heroMedia:"none", heroMediaUrl:"",
+  heroStyle:"minimal", heroMedia:"none", heroMediaUrl:"", heroSlider:"",
   heroSeo:"", heroCtas:[],
   sectionNotes:{},
   goal:"", audience:"", tone:"", brief:"", extra:"",
@@ -1553,7 +1553,8 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
 
   const [fontPicker, setFontPicker] = useState(null); // "fontDisplay" | "fontBody" | null
 
-  const c  = { ...THEMES[theme], pri: brief.brand.primary };
+  // Fixný MediaVolt accent — nezávisí od vybratej farebnej témy briefu
+  const c  = { ...MV_THEME, pri: "#ff6a00" };
   const br = brief.brand;
 
   const selectType    = (id)    => update({ webType:id, sections:TYPE_DEFAULTS[id] });
@@ -1706,9 +1707,9 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   const orderedSecs = brief.sections.map(id=>SECTIONS.find(s=>s.id===id)).filter(Boolean);
 
   const S = {
-    root:   { height:"100vh", background:c.bg, color:c.text, fontFamily:"'Inter',system-ui,sans-serif", fontSize:13, transition:"background .2s,color .2s", display:"flex", flexDirection:"column" },
+    root:   { height: isAdmin ? "calc(100vh - var(--wq-admin-h, 148px))" : "100vh", background:c.bg, color:c.text, fontFamily:"'Space Grotesk',system-ui,sans-serif", fontSize:13, transition:"background .2s,color .2s", display:"flex", flexDirection:"column" },
     header: { background:c.panel, borderBottom:`1px solid ${c.border}`, padding:"0.7rem 1.25rem", display:"flex", alignItems:"center", gap:"0.75rem", flexShrink:0 },
-    logo:   { fontWeight:800, fontSize:"0.9rem", letterSpacing:"-0.02em", color:c.text },
+    logo:   { fontWeight:800, fontSize:"0.9rem", letterSpacing:"-0.02em", color:c.text, fontFamily:"'Syne','Space Grotesk',sans-serif" },
     adminBadge:{ background:`${c.pri}20`, color:c.pri, fontSize:"0.62rem", fontWeight:700, padding:"0.2rem 0.55rem", borderRadius:20, letterSpacing:"0.06em" },
     hRight: { display:"flex", alignItems:"center", gap:"0.625rem", marginLeft:"auto" },
     live:   { display:"flex", alignItems:"center", gap:"0.35rem", fontSize:"0.68rem", color:"#22c55e" },
@@ -1835,32 +1836,32 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   // Blok s poradím podľa BLOCK_ORDER (flex order v strednom paneli)
   const BLK = (id) => ({ ...S.block, order: BLOCK_ORDER[id] ?? 50 });
 
+  // Poradie veľkostí náhľadu — kroky Rozšíriť/Zúžiť idú po tomto rebríčku
+  const RIGHT_SIZES = ["normal","overlay","wide","full"];
+  const rightSizeIdx = RIGHT_SIZES.indexOf(rightSize);
   const RightControlRow = () => (
     !isMobile && (
       <div style={{...S.rModeRow, justifyContent:"flex-end", gap:"0.35rem"}}>
-        {rightSize==="normal" && (
+        {/* Zúžiť o krok — viditeľné vždy keď nie je najužší stav */}
+        {rightSizeIdx > 0 && (
           <button
-            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.5rem"}}
-            onClick={()=>setRightSize("overlay")}
-            title="Roztiahnuť cez väčšinu obrazovky (prekryje ostatné panely)">⛶</button>
+            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.55rem",display:"flex",alignItems:"center",gap:"0.3rem"}}
+            onClick={()=>setRightSize(RIGHT_SIZES[rightSizeIdx-1])}
+            title={`Zúžiť náhľad o krok (${RIGHT_SIZES[rightSizeIdx-1]})`}>⤡ Zúžiť</button>
         )}
-        {rightSize==="overlay" && (
+        {/* Rozšíriť o krok */}
+        {rightSizeIdx < RIGHT_SIZES.length-1 && (
           <button
-            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.5rem"}}
-            onClick={()=>setRightSize("wide")}
-            title="Roztiahnuť takmer na celú šírku">⤢</button>
+            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.55rem",display:"flex",alignItems:"center",gap:"0.3rem"}}
+            onClick={()=>setRightSize(RIGHT_SIZES[rightSizeIdx+1])}
+            title={`Rozšíriť náhľad o krok (${RIGHT_SIZES[rightSizeIdx+1]})`}>⤢ Rozšíriť</button>
         )}
-        {rightSize==="wide" && (
-          <button
-            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.5rem"}}
-            onClick={()=>setRightSize("full")}
-            title="Roztiahnuť cez celé okno">⛶</button>
-        )}
+        {/* Reset na úzky stĺpec — z hociktorého rozšíreného stavu */}
         {rightSize!=="normal" && (
           <button
-            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.5rem"}}
+            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.55rem"}}
             onClick={()=>setRightSize("normal")}
-            title="Vrátiť pôvodnú šírku">⤡</button>
+            title="Vrátiť na úzky náhľad v pravom stĺpci">✕</button>
         )}
         {rightSize==="normal" && (
           <button style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.5rem"}} onClick={()=>setRightOpen(false)} title="Zbaliť náhľad">▶</button>
@@ -1872,6 +1873,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   const RightModeRow = () => (
     <div style={S.rModeRow}>
       <button style={S.rModeBtn(rightMode==="wireframe")} onClick={()=>setRightMode("wireframe")}>Náhľad</button>
+      <button style={S.rModeBtn(rightMode==="template")} onClick={()=>setRightMode("template")}>Šablóna</button>
       {isAdmin && <button style={S.rModeBtn(rightMode==="prompt")} onClick={()=>setRightMode("prompt")}>Prompt</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="webview")} onClick={()=>setRightMode("webview")}>{T("webPreview")}</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="code")} onClick={()=>setRightMode("code")}>Kód</button>}
@@ -1929,6 +1931,50 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           </div>
         </div>
       </>)}
+      {rightMode==="template" && (()=>{
+        // Šablóna — základné údaje projektu + živý vizuál stránky (aktualizuje sa s každou zmenou briefu)
+        const wt  = WEB_TYPES.find(w=>w.id===brief.webType);
+        const ind = INDUSTRIES.find(i=>i.id===brief.industry);
+        const sub = ind?.subs?.find(s=>s.id===brief.industrySubcat);
+        const addr = (brief.addresses||[])[0];
+        const Row = ({l,v}) => v ? (
+          <div style={{display:"flex",gap:"0.5rem",fontSize:"0.68rem",marginBottom:"0.3rem"}}>
+            <span style={{color:c.muted,minWidth:70,flexShrink:0}}>{l}</span>
+            <span style={{color:c.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis"}}>{v}</span>
+          </div>
+        ) : null;
+        return (
+          <div>
+            <div style={S.wfTitle}>Šablóna projektu — základné údaje</div>
+            <div style={{background:c.card,border:`1px solid ${c.border}`,borderRadius:10,padding:"0.75rem",marginBottom:"0.875rem"}}>
+              <div style={{fontFamily:"'Syne','Space Grotesk',sans-serif",fontWeight:800,fontSize:"0.95rem",color:c.text,marginBottom:"0.5rem"}}>
+                {brief.projectName||"Bez názvu"}
+              </div>
+              <Row l="Typ webu"  v={wt?`${wt.icon} ${wt.label}`:null}/>
+              <Row l="Odvetvie"  v={ind?`${ind.icon} ${ind.label}${sub?` — ${sub.label}`:""}`:null}/>
+              <Row l="Firma"     v={brief.companyName}/>
+              <Row l="IČO"       v={brief.ico}/>
+              <Row l="Telefón"   v={brief.phone}/>
+              <Row l="Email"     v={brief.email}/>
+              <Row l="Web"       v={brief.web}/>
+              <Row l="Adresa"    v={addr&&(addr.street||addr.city)?[addr.street,addr.city].filter(Boolean).join(", "):null}/>
+              <Row l="Cieľ"      v={brief.goal}/>
+              <Row l="Sekcie"    v={String((brief.sections||[]).length)}/>
+              <div style={{display:"flex",alignItems:"center",gap:"0.35rem",marginTop:"0.5rem"}}>
+                {["bg","surface","primary","accent","text"].map(k=>(
+                  <div key={k} title={`${k}: ${br[k]}`} style={{width:18,height:18,borderRadius:5,background:br[k],border:`1px solid ${c.border}`,flexShrink:0}}/>
+                ))}
+                <span style={{fontSize:"0.62rem",color:c.muted,marginLeft:"0.3rem"}}>{brief.preset||"Custom"}</span>
+              </div>
+              <div style={{fontSize:"0.62rem",color:c.muted,marginTop:"0.3rem"}}>
+                {br.fontDisplay} / {br.fontBody}
+              </div>
+            </div>
+            <div style={S.wfTitle}>Vizuál stránky</div>
+            <MiniWebPreview brief={brief} sections={orderedSecs} note={T("previewNote")}/>
+          </div>
+        );
+      })()}
       {rightMode==="prompt" && isAdmin && (<>
         <button style={S.copyBtn} onClick={copyOut}>{copied?"✓ Skopírované":"Kopírovať prompt"}</button>
         <div style={S.codeBox}>{prompt}</div>
@@ -2287,7 +2333,6 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             {simple ? "✨ "+T("simpleMode") : "⚙️ "+T("expertMode")}
           </button>
           <div style={S.live}><div style={S.liveDot}/>Live</div>
-          <ThemeToggle theme={theme} setTheme={setTheme}/>
           {!isMobile && <span style={S.badge}>#{sessionId}</span>}
         </div>
       </div>
@@ -3880,6 +3925,54 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                                   );
                                 })}
                               </div>
+                              {/* Vizuálny výber slidera — živé náhľady z public/sliders */}
+                              {brief.heroMedia==="carousel" && (
+                                <div style={{marginTop:"0.625rem"}}>
+                                  <div style={{fontSize:"0.62rem",fontWeight:600,color:c.muted,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:"0.4rem"}}>
+                                    Typ slidera — vyber vizuál
+                                  </div>
+                                  <div style={{display:"grid",gridTemplateColumns:"repeat(4, minmax(0, 1fr))",gap:"0.5rem"}}>
+                                    {SLIDER_OPTIONS.map(sl=>{
+                                      const sel = brief.heroSlider===sl.id;
+                                      return (
+                                        <button key={sl.id} onClick={()=>update({heroSlider: sel ? "" : sl.id})} style={{
+                                          padding:0, borderRadius:8, overflow:"hidden", textAlign:"left",
+                                          border:`2px solid ${sel?c.pri:c.border}`,
+                                          background:sel?c.cardActive:c.bg, cursor:"pointer", minHeight:"unset",
+                                          boxShadow: sel ? `0 0 0 3px ${c.pri}30` : "none",
+                                        }}>
+                                          <div style={{position:"relative", aspectRatio:"16/9", overflow:"hidden", background:"#0c0c0f"}}>
+                                            <iframe
+                                              srcDoc={sl.html}
+                                              title={sl.label}
+                                              loading="lazy"
+                                              sandbox="allow-scripts"
+                                              style={{
+                                                width:"400%", height:"400%", border:"none",
+                                                transform:"scale(0.25)", transformOrigin:"top left",
+                                                pointerEvents:"none",
+                                              }}
+                                              tabIndex={-1}
+                                            />
+                                            {sel && (
+                                              <div style={{position:"absolute",top:5,right:5,background:c.pri,color:"#fff",
+                                                borderRadius:"50%",width:18,height:18,display:"flex",alignItems:"center",
+                                                justifyContent:"center",fontSize:"0.65rem",fontWeight:800}}>✓</div>
+                                            )}
+                                          </div>
+                                          <div style={{padding:"0.3rem 0.45rem"}}>
+                                            <div style={{fontSize:"0.64rem",fontWeight:sel?700:600,color:sel?c.pri:c.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sl.label}</div>
+                                            <div style={{fontSize:"0.55rem",color:c.desc,lineHeight:1.3}}>{sl.desc}</div>
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  <div style={{fontSize:"0.6rem",color:c.desc,marginTop:"0.35rem",lineHeight:1.4}}>
+                                    Náhľady sú živé animácie. Kliknutím vyberieš typ, opätovným kliknutím zrušíš výber.
+                                  </div>
+                                </div>
+                              )}
                               {/* URL pre médium */}
                               {(brief.heroMedia==="image"||brief.heroMedia==="video"||brief.heroMedia==="3dscene"||brief.heroMedia==="custom"||brief.heroMedia==="carousel") && (
                                 <input
@@ -3970,7 +4063,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             }}
           />
           <div style={{
-            position:"fixed", top:0, right:0, bottom:0,
+            position:"fixed", top:"var(--wq-admin-h, 0px)", right:0, bottom:0,
             width:"82%", maxWidth:"calc(100vw - 64px)",
             background:c.panel, borderLeft:`1.5px solid ${c.pri}`,
             boxShadow:"-8px 0 32px rgba(0,0,0,0.4)",
