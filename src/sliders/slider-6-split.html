@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slider 6 — Split reveal</title>
+<style>
+  :root{--ease:cubic-bezier(.77,0,.18,1);--cols:5}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:#0c0c0f;min-height:100vh;
+    display:flex;align-items:center;justify-content:center;padding:24px;
+  }
+  .slider{
+    position:relative;width:min(100%,1280px);aspect-ratio:16/9;
+    border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6);
+  }
+  .slide{position:absolute;inset:0;visibility:hidden}
+  .slide.active{visibility:visible}
+  .panels{position:absolute;inset:0;display:flex}
+  .panel{
+    flex:1;transform:translateY(101%);
+    transition:transform .8s var(--ease);
+  }
+  .slide.active .panel{transform:translateY(0)}
+  .slide.active .panel:nth-child(1){transition-delay:0s}
+  .slide.active .panel:nth-child(2){transition-delay:.07s}
+  .slide.active .panel:nth-child(3){transition-delay:.14s}
+  .slide.active .panel:nth-child(4){transition-delay:.21s}
+  .slide.active .panel:nth-child(5){transition-delay:.28s}
+  .slide:nth-child(odd) .panel:nth-child(even){transform:translateY(-101%)}
+  .slide:nth-child(odd).active .panel{transform:translateY(0)}
+  .s1 .panel{background:linear-gradient(160deg,#2b56c4,#101b3f)}
+  .s2 .panel{background:linear-gradient(160deg,#e23b3b,#420909)}
+  .s3 .panel{background:linear-gradient(160deg,#14b8a6,#07322d)}
+  .s4 .panel{background:linear-gradient(160deg,#caa24a,#4a350c)}
+  .content{
+    position:absolute;inset:0;z-index:2;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+    text-align:center;gap:12px;padding:24px;
+  }
+  .kicker{
+    font-size:clamp(12px,1.4vw,16px);font-weight:700;letter-spacing:.25em;
+    text-transform:uppercase;color:rgba(255,255,255,.7);
+    opacity:0;transform:translateY(16px);transition:.6s var(--ease) .45s;
+  }
+  .content h2{
+    font-size:clamp(34px,6vw,84px);font-weight:900;color:#fff;letter-spacing:-.03em;line-height:1;
+    opacity:0;transform:translateY(24px);transition:.6s var(--ease) .55s;
+  }
+  .content p{
+    font-size:clamp(14px,1.7vw,19px);color:rgba(255,255,255,.75);max-width:56ch;
+    opacity:0;transform:translateY(16px);transition:.6s var(--ease) .68s;
+  }
+  .slide.active .kicker,.slide.active h2,.slide.active p{opacity:1;transform:translateY(0)}
+  .arrows{position:absolute;inset:0;pointer-events:none;z-index:5}
+  .arrows button{
+    pointer-events:auto;position:absolute;top:50%;transform:translateY(-50%);
+    width:48px;height:48px;border-radius:50%;border:0;cursor:pointer;
+    background:rgba(255,255,255,.12);backdrop-filter:blur(6px);
+    color:#fff;font-size:20px;transition:.3s;
+  }
+  .arrows button:hover{background:#fff;color:#111}
+  #prev{left:18px}#next{right:18px}
+  .bar{position:absolute;bottom:0;left:0;height:4px;background:#fff;z-index:6;width:0}
+  .bar.run{animation:load 6s linear forwards}
+  @keyframes load{to{width:100%}}
+  .label{position:absolute;top:18px;left:22px;z-index:5;color:rgba(255,255,255,.7);font-size:13px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+</style>
+</head>
+<body>
+  <div class="slider" id="slider">
+    <div class="slide s1 active">
+      <div class="panels"><div class="panel"></div><div class="panel"></div><div class="panel"></div><div class="panel"></div><div class="panel"></div></div>
+      <div class="content">
+        <div class="kicker">Efekt 01</div>
+        <h2>Padajúce panely</h2>
+        <p>Pozadie sa skladá z piatich pásov, ktoré padajú s postupným oneskorením — striedavo zhora a zdola.</p>
+      </div>
+    </div>
+    <div class="slide s2">
+      <div class="panels"><div class="panel"></div><div class="panel"></div><div class="panel"></div><div class="panel"></div><div class="panel"></div></div>
+      <div class="content">
+        <div class="kicker">Efekt 02</div>
+        <h2>Rytmus prechodu</h2>
+        <p>Delay 70 ms medzi panelmi vytvára vlnu, ktorá vedie oko naprieč obrazovkou.</p>
+      </div>
+    </div>
+    <div class="slide s3">
+      <div class="panels"><div class="panel"></div><div class="panel"></div><div class="panel"></div><div class="panel"></div><div class="panel"></div></div>
+      <div class="content">
+        <div class="kicker">Efekt 03</div>
+        <h2>Text po dopade</h2>
+        <p>Nadpis a popis nabiehajú až po dosadnutí panelov — obsah nikdy nesúperí s pozadím.</p>
+      </div>
+    </div>
+    <div class="slide s4">
+      <div class="panels"><div class="panel"></div><div class="panel"></div><div class="panel"></div><div class="panel"></div><div class="panel"></div></div>
+      <div class="content">
+        <div class="kicker">Efekt 04</div>
+        <h2>Progres dole</h2>
+        <p>Tenká linka pri spodnom okraji odpočítava čas do ďalšieho slidu.</p>
+      </div>
+    </div>
+    <div class="arrows">
+      <button id="prev" aria-label="Predchádzajúci">←</button>
+      <button id="next" aria-label="Ďalší">→</button>
+    </div>
+    <div class="bar" id="bar"></div>
+    <span class="label">Split Reveal</span>
+  </div>
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const bar=document.getElementById('bar');
+  let i=0,timer;
+  function go(n){
+    slides[i].classList.remove('active');
+    i=(n+slides.length)%slides.length;
+    slides[i].classList.add('active');
+    resetBar();
+  }
+  function resetBar(){
+    bar.classList.remove('run');void bar.offsetWidth;bar.classList.add('run');
+    clearInterval(timer);timer=setInterval(()=>go(i+1),6000);
+  }
+  document.getElementById('next').onclick=()=>go(i+1);
+  document.getElementById('prev').onclick=()=>go(i-1);
+  resetBar();
+</script>
+</body>
+</html>

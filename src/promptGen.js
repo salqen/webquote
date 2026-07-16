@@ -158,8 +158,10 @@ export function generateProPrompt(b, cat) {
   const integrations = (b.techIntegrations || [])
     .map(id => INTEGRATION_OPTIONS.find(x => x.id === id)?.label || id);
   const ctaLabels = (b.heroCtas || [])
-    .filter(id => (b.sections || []).includes(id))
-    .map(id => SECTIONS.find(s => s.id === id)?.label || id);
+    .filter(id => id === "contactus" || (b.sections || []).includes(id))
+    .map(id => id === "contactus"
+      ? "Contact us (direct contact CTA — scroll to contact section or open contact page)"
+      : (SECTIONS.find(s => s.id === id)?.label || id));
   const domains = (b.domains || []).map(clean).filter(Boolean);
 
   // ── Brand tokeny — len validné hex hodnoty, inak fallback ──
@@ -197,6 +199,13 @@ Ground rules:
     parts.push(H("Business identity (use in footer, contact section & structured data)"));
     parts.push(identityLines.join("\n"));
   }
+
+  // 2b · Právne dokumenty — súhlas so spracovaním údajov + cookies policy vo footri
+  parts.push(H("Legal pages (GDPR consent & Cookies policy)"));
+  parts.push(`- Instead of a generic GDPR page, create a **"Súhlas so spracovaním osobných údajov / Podmienky ochrany súkromia"** page (consent-style privacy policy). The full Slovak text is prepared by the agency (WebQuote → Nástroje → "Súhlas — os. údaje") and will be supplied — create the page at \`/gdpr\` (or \`/ochrana-osobnych-udajov\`) and render the supplied markdown/text with proper headings.
+- Create a **"Pravidlá používania súborov cookies (Cookies policy)"** page at \`/cookies\` — text likewise supplied (WebQuote → Nástroje → "Cookies policy").
+- Both documents are pre-filled with the company identity above (name, registered office, IČO, contact e-mail) — keep those details in sync with the footer and contact section.
+- **Footer must contain links to both pages**: "Ochrana osobných údajov" → /gdpr and "Cookies" → /cookies, plus a "Nastavenia cookies" link/button that re-opens the cookie-consent banner.`);
 
   // 3 · Popis od klienta — transformačná inštrukcia
   const desc = block(b.brief);
@@ -237,7 +246,7 @@ Ground rules:
   // 6 · Navigácia — len ak je nav sekcia
   if ((b.sections || []).includes("nav")) {
     parts.push(H("Navigation"));
-    parts.push(`- Behaviour: ${b.navBehavior || "sticky"} · Background: ${b.navBackground || "solid"} · Layout: ${b.navLayout || "top"} · Logo position: ${b.navLogo || "left"}${b.navAlwaysHamburger ? " · Hamburger menu at ALL breakpoints" : ""}${b.navSocials ? " · Social icons in the nav bar" : ""}
+    parts.push(`- Behaviour: ${b.navBehavior || "sticky"} · Background: ${b.navBackground || "solid"} · Layout: ${b.navLayout === "floating" ? "floating (nav sits BELOW the hero section; after scrolling past it, it docks/anchors to the top of the viewport)" : b.navLayout || "top"} · Logo position: ${b.navLogo || "left"}${b.navAlwaysHamburger ? " · Hamburger menu at ALL breakpoints" : ""}${b.navSocials ? " · Social icons in the nav bar" : ""}
 - Smooth-scroll to sections with correct scroll-margin for the sticky header; highlight the active section link.`);
   }
 
@@ -248,6 +257,22 @@ Ground rules:
     hero.push(`- **Style:** ${HERO_STYLES[b.heroStyle] || HERO_STYLES.minimal}`);
     if (b.heroMedia && b.heroMedia !== "none") {
       hero.push(`- **Media:** ${HERO_MEDIA[b.heroMedia]}${isUrl(b.heroMediaUrl) ? ` — reference: ${clean(b.heroMediaUrl)}` : ""}`);
+      if (b.heroMediaUpload && b.heroMediaUpload.name) {
+        hero.push(`- **Reference image:** client uploaded "${b.heroMediaUpload.name}" — use it as the hero visual reference (delivered separately).`);
+      }
+      if (b.heroMedia === "carousel" && b.heroSlider) {
+        const SLIDER_TYPES = {
+          fade:"Fade / cross-dissolve transition between slides",
+          slide:"Classic horizontal slide transition",
+          coverflow:"3D coverflow effect (Apple-style)",
+          kenburns:"Ken Burns — slow zoom & pan on each image",
+          cube:"3D rotating cube transition",
+          split:"Split transition — slide splits into halves",
+          circle:"Circular reveal transition",
+          cards:"Stacked cards transition",
+        };
+        hero.push(`- **Slider type:** ${SLIDER_TYPES[b.heroSlider] || b.heroSlider} — implement the hero carousel with exactly this transition style, autoplay ~4s, dot navigation, pause on manual interaction.`);
+      }
     } else {
       hero.push(`- **Media:** ${HERO_MEDIA.none}`);
     }
