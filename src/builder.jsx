@@ -835,6 +835,25 @@ function makeAddress(type) {
   return { id:Math.random().toString(36).slice(2,8), type:type||"office", street:"", city:"", zip:"", country:"Slovensko" };
 }
 
+// ── PODKLADY — linky na súbory od klienta ───────────────────
+const ASSET_TYPES = [
+  { id:"photos",  label:"Fotky / galéria",   icon:"📷" },
+  { id:"logo",    label:"Logo",              icon:"⬡"  },
+  { id:"brand",   label:"Brand manuál",      icon:"🎨" },
+  { id:"texts",   label:"Texty / dokumenty", icon:"📄" },
+  { id:"video",   label:"Video",             icon:"🎬" },
+  { id:"archive", label:"ZIP so všetkým",    icon:"🗜" },
+  { id:"other",   label:"Iné",               icon:"📎" },
+];
+const UPLOAD_SERVICES = [
+  { name:"Úschovna.cz",  url:"https://www.uschovna.cz",  note:"zadarmo do 30 GB, bez registrácie" },
+  { name:"WeTransfer",   url:"https://wetransfer.com",   note:"zadarmo do 2 GB, bez registrácie" },
+  { name:"Google Drive", url:"https://drive.google.com", note:"zdieľanie cez odkaz (nastav „ktokoľvek s odkazom“)" },
+];
+function makeAsset(type) {
+  return { id:Math.random().toString(36).slice(2,8), type:type||"photos", url:"", note:"" };
+}
+
 const MENU_ITEMS = [
   { id:"info",     label:"Základné info",  icon:"🏢" },
   { id:"brief",    label:"Brief",          icon:"📋" },
@@ -856,6 +875,7 @@ const DEFAULT_BRIEF = {
   heroSeo:"", heroCtas:[],
   sectionNotes:{},
   goal:"", audience:"", tone:"", brief:"", extra:"",
+  assets:[],
   sections: TYPE_DEFAULTS.landing,
   logoChoice:"", logoKeepRedesign:"", logoUploads:{}, logoBrief:"", logoRefs:[],
   domainStatus:"", domains:[""],
@@ -1369,41 +1389,29 @@ function getSessionId() {
 
 // ─── UNIFIED BUILDER VIEW (client + admin) ────────────────
 
-// Sub-sekcie skryté v jednoduchom režime (UI pre laikov)
-const SIMPLE_HIDDEN = ["info-details","brand-colors","brand-fonts","brief-structure","brief-nav","content-social","content-extra"];
-
+// Poradie: najprv DÁTA (údaje, texty, obsah, podklady), potom DIZAJN,
+// nakoniec technické detaily.
 const ACCORDION_BASE = [
   {
-    id:"info", label:"Základné info o projekte", icon:"🏢",
+    id:"info", label:"Základné údaje", icon:"🏢",
     subs:[
-      { id:"info-industry", label:"Odvetvie" },
       { id:"info-project",  label:"Projekt" },
+      { id:"info-industry", label:"Odvetvie" },
       { id:"info-company",  label:"Firemné údaje" },
       { id:"info-address",  label:"Adresy" },
-      { id:"info-details",  label:"Detaily projektu" },
     ],
   },
   {
-    id:"brand", label:"Brand identity", icon:"🎨",
+    id:"brief", label:"Zadanie a texty", icon:"📋",
     subs:[
-      { id:"brand-logo",   label:"Logo" },
-      { id:"brand-preset", label:"Presety" },
-      { id:"brand-colors", label:"Farby" },
-      { id:"brand-fonts",  label:"Typografia" },
-    ],
-  },
-  {
-    id:"brief", label:"Brief", icon:"📋",
-    subs:[
-      { id:"brief-type",   label:"Typ webu" },
+      { id:"brief-type",      label:"Typ webu" },
       { id:"brief-structure", label:"Štruktúra stránky" },
-      { id:"brief-nav",    label:"Navigácia & Téma" },
-      { id:"brief-goal",   label:"Cieľ a publikum" },
-      { id:"brief-desc",   label:"Popis projektu" },
+      { id:"brief-goal",      label:"Cieľ a publikum" },
+      { id:"brief-desc",      label:"Popis projektu" },
     ],
   },
   {
-    id:"content", label:"Obsah", icon:"☰",
+    id:"content", label:"Obsah webu", icon:"☰",
     subs:[
       { id:"content-core",    label:"Základ" },
       { id:"content-content", label:"Obsah" },
@@ -1412,7 +1420,53 @@ const ACCORDION_BASE = [
       { id:"content-extra",   label:"Extra" },
     ],
   },
+  {
+    id:"assets", label:"Podklady a súbory", icon:"📎",
+    subs:[
+      { id:"assets-files", label:"Linky na podklady" },
+    ],
+  },
+  {
+    id:"brand", label:"Dizajn", icon:"🎨",
+    subs:[
+      { id:"brand-logo",   label:"Logo" },
+      { id:"brand-preset", label:"Presety" },
+      { id:"brand-colors", label:"Farby" },
+      { id:"brand-fonts",  label:"Typografia" },
+      { id:"brief-nav",    label:"Navigácia & Téma" },
+    ],
+  },
+  {
+    id:"tech", label:"Technické detaily", icon:"⚙️",
+    subs:[
+      { id:"info-details", label:"Doména, hosting, CMS" },
+    ],
+  },
 ];
+
+// ── Poradie blokov v strede (flex order) — dáta najprv, dizajn potom ──
+const BLOCK_ORDER = {
+  "info-project":1, "info-industry":2, "info-company":3, "info-address":4,
+  "brief-type":5, "brief-structure":6, "brief-goal":7, "brief-desc":8,
+  "content-core":9, "content-content":10, "content-social":11, "content-convert":12, "content-extra":13,
+  "assets-files":14,
+  "brand-logo":15, "brand-preset":16, "brand-colors":17, "brand-fonts":18, "brief-nav":19,
+  "info-details":20,
+  "wiz-summary":21,
+};
+const CAT_BLOCK_ORDER = { core:9, content:10, social:11, convert:12, extra:13 };
+
+// ── WIZARD — sprievodca pre jednoduchý režim ────────────────
+// Každý krok = zoznam blokov, ktoré sú v ňom viditeľné.
+const WIZARD_STEPS = [
+  { id:"data",    icon:"🏢", blocks:["info-project","info-industry","info-company","info-address"] },
+  { id:"texts",   icon:"📝", blocks:["brief-type","brief-goal","brief-desc"] },
+  { id:"content", icon:"☰",  blocks:["content-core","content-content","content-social","content-convert","content-extra"] },
+  { id:"assets",  icon:"📎", blocks:["assets-files"] },
+  { id:"design",  icon:"🎨", blocks:["brand-logo","brand-preset"] },
+  { id:"summary", icon:"✅", blocks:["wiz-summary"] },
+];
+const ALL_BLOCK_IDS = Object.keys(BLOCK_ORDER);
 
 const WF_SECTIONS = {
   nav:{h:28,label:"Nav"}, hero:{h:90,label:"Hero"}, features:{h:70,label:"Features"},
@@ -1440,11 +1494,24 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
     try { return localStorage.getItem("wq_ui_mode") || (isAdmin ? "expert" : "simple"); }
     catch { return isAdmin ? "expert" : "simple"; }
   });
-  const setUiMode = (m) => { setUiModeRaw(m); try { localStorage.setItem("wq_ui_mode", m); } catch {} };
+  const setUiMode = (m) => {
+    setUiModeRaw(m);
+    if (m === "simple") setWizStep(0);
+    try { localStorage.setItem("wq_ui_mode", m); } catch {}
+  };
   const simple = uiMode === "simple";
 
+  // ── Wizard (jednoduchý režim) — krokový sprievodca ──
+  const [wizStep, setWizStep] = useState(0);
+  const wizVisible = new Set(WIZARD_STEPS[Math.min(wizStep, WIZARD_STEPS.length-1)].blocks);
+  const centerRef = useRef(null);
+  const gotoWizStep = (i) => {
+    setWizStep(Math.max(0, Math.min(WIZARD_STEPS.length-1, i)));
+    if (centerRef.current) centerRef.current.scrollTop = 0;
+  };
+
   const [activeSub, setActiveSub] = useState("info-project");
-  const [openAcc, setOpenAcc]     = useState({ info:true, brand:false, brief:false, content:false });
+  const [openAcc, setOpenAcc]     = useState({ info:true, brief:false, content:false, assets:false, brand:false, tech:false });
   const [rightMode, setRightMode] = useState("wireframe"); // wireframe | prompt | code
   const [copied, setCopied]       = useState(false);
   const [expandedSec, setExpSec]  = useState(null); // id of section with open detail panel
@@ -1496,6 +1563,9 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   const addAddress    = ()      => update({ addresses:[...brief.addresses, makeAddress("office")] });
   const removeAddress = (id)    => update({ addresses:brief.addresses.filter(a=>a.id!==id) });
   const updateAddress = (id,k,v)=> update({ addresses:brief.addresses.map(a=>a.id===id?{...a,[k]:v}:a) });
+  const addAsset      = (type)  => update({ assets:[...(brief.assets||[]), makeAsset(type)] });
+  const removeAsset   = (id)    => update({ assets:(brief.assets||[]).filter(a=>a.id!==id) });
+  const updateAsset   = (id,k,v)=> update({ assets:(brief.assets||[]).map(a=>a.id===id?{...a,[k]:v}:a) });
 
   const handleLogoUpload = (placementId, file) => {
     if(!file) return;
@@ -1652,7 +1722,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                   ? "0px 0px 1fr"
                   : rightSize==="wide"
                     ? "0px 1fr 9fr"
-                    : `${leftOpen?"210px":"56px"} 1fr ${rightOpen?"250px":"40px"}`,
+                    : `${simple?"0px":(leftOpen?"210px":"56px")} 1fr ${rightOpen?"250px":"40px"}`,
               overflow:"hidden", minHeight:0,
               transition:"grid-template-columns .25s cubic-bezier(0.4,0,0.2,1)" },
     panelToggle:(side)=>({ position:"absolute", top:"50%", [side]:0,
@@ -1709,8 +1779,8 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
     progressBar:{ height:3, background:c.border, borderRadius:2, overflow:"hidden" },
     progressFill:(pct)=>({ height:"100%", width:`${pct}%`, background:c.pri, borderRadius:2, transition:"width .3s" }),
 
-    // CENTER
-    center: { overflowY:"auto", padding:"1.5rem", gridColumn:"2", minWidth:0 },
+    // CENTER — flex column s order: dáta najprv, dizajn potom
+    center: { overflowY:"auto", padding:"1.5rem", gridColumn:"2", minWidth:0, display:"flex", flexDirection:"column" },
     secTitle:{ fontSize:"0.6rem", fontWeight:700, color:c.muted, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.875rem", display:"flex", alignItems:"center", gap:"0.5rem" },
     divider:{ flex:1, height:1, background:c.border },
     block:  { marginBottom:"1.75rem", scrollMarginTop:"1rem" },
@@ -1761,6 +1831,9 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   const ATITLE = (txt, id) => (
     <div id={id} style={{...S.secTitle}}>{txt}<div style={S.divider}/></div>
   );
+
+  // Blok s poradím podľa BLOCK_ORDER (flex order v strednom paneli)
+  const BLK = (id) => ({ ...S.block, order: BLOCK_ORDER[id] ?? 50 });
 
   const RightControlRow = () => (
     !isMobile && (
@@ -2183,8 +2256,10 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   return (
     <div style={S.root}>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
-      {/* Jednoduchý režim — skryje pokročilé bloky formulára */}
-      {simple && <style>{SIMPLE_HIDDEN.map(id=>`#blk-${id}`).join(",")+"{display:none !important}"}</style>}
+      {/* Jednoduchý režim = wizard — viditeľné sú len bloky aktuálneho kroku */}
+      {simple && <style>{ALL_BLOCK_IDS.filter(id=>!wizVisible.has(id)).map(id=>`#blk-${id}`).join(",")+"{display:none !important}"}</style>}
+      {/* Zhrnutie (wizard) je viditeľné len v jednoduchom režime */}
+      {!simple && <style>{`#blk-wiz-summary{display:none !important}`}</style>}
 
       {/* Header */}
       <div style={S.header}>
@@ -2220,16 +2295,16 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
       {/* Mobile tabs */}
       {isMobile && (
         <div style={S.mobileTabs}>
-          <button style={S.mobileTab(mobilePane==="nav")} onClick={()=>setMobilePane("nav")}>☰ Menu</button>
-          <button style={S.mobileTab(mobilePane==="form")} onClick={()=>setMobilePane("form")}>📝 Formulár</button>
+          {!simple && <button style={S.mobileTab(mobilePane==="nav")} onClick={()=>setMobilePane("nav")}>☰ Menu</button>}
+          <button style={S.mobileTab(mobilePane==="form"||(simple&&mobilePane==="nav"))} onClick={()=>setMobilePane("form")}>📝 Formulár</button>
           <button style={S.mobileTab(mobilePane==="preview")} onClick={()=>setMobilePane("preview")}>👁 Náhľad</button>
         </div>
       )}
 
       <div style={S.body}>
 
-        {/* LEFT — accordion (full) alebo rail (collapsed) */}
-        {(rightSize==="normal" || rightSize==="overlay") && ((isMobile && mobilePane==="nav") || (!isMobile)) && (
+        {/* LEFT — accordion (full) alebo rail (collapsed); vo wizarde skrytý */}
+        {!simple && (rightSize==="normal" || rightSize==="overlay") && ((isMobile && mobilePane==="nav") || (!isMobile)) && (
         <div style={S.left}>
           {(leftOpen || (isMobile && mobilePane==="nav")) ? (
             <>
@@ -2241,7 +2316,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                       {acc.label}
                       <span style={S.accChevron(openAcc[acc.id])}>▶</span>
                     </button>
-                    {openAcc[acc.id] && acc.subs.filter(sub=>!simple||!SIMPLE_HIDDEN.includes(sub.id)).map(sub=>(
+                    {openAcc[acc.id] && acc.subs.map(sub=>(
                       <button key={sub.id} style={S.subItem(activeSub===sub.id)}
                         onClick={()=>{
                           selectSub(acc.id, sub.id);
@@ -2294,11 +2369,78 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
         )}
 
         {/* CENTER — full scrollable form */}
-        {rightSize!=="full" && ((isMobile && mobilePane==="form") || !isMobile) && (
-        <div style={S.center}>
+        {rightSize!=="full" && ((isMobile && (mobilePane==="form" || (simple && mobilePane==="nav"))) || !isMobile) && (
+        <div ref={centerRef} style={S.center}>
+
+          {/* ── WIZARD HLAVIČKA — kroky sprievodcu (jednoduchý režim) ── */}
+          {simple && (
+            <div style={{order:0, marginBottom:"1.25rem"}}>
+              <div style={{display:"flex", gap:"0.3rem", flexWrap:"wrap", marginBottom:"0.75rem"}}>
+                {WIZARD_STEPS.map((st,i)=>{
+                  const active = i===wizStep;
+                  const done = i<wizStep;
+                  return (
+                    <button key={st.id} onClick={()=>gotoWizStep(i)} style={{
+                      flex:"1 1 auto", display:"flex", alignItems:"center", justifyContent:"center",
+                      gap:"0.35rem", padding:"0.45rem 0.5rem", borderRadius:8,
+                      border:`1.5px solid ${active?c.pri:done?`${c.pri}80`:c.border}`,
+                      background:active?`${c.pri}18`:"transparent",
+                      color:active?c.pri:done?c.text:c.muted,
+                      cursor:"pointer", minHeight:"unset", whiteSpace:"nowrap",
+                      fontSize:"0.68rem", fontWeight:active?700:500,
+                    }}>
+                      <span style={{
+                        width:16, height:16, borderRadius:"50%", flexShrink:0,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        fontSize:"0.58rem", fontWeight:700,
+                        background:done?c.pri:active?`${c.pri}30`:"transparent",
+                        border:done?"none":`1px solid ${active?c.pri:c.border}`,
+                        color:done?"#fff":active?c.pri:c.muted,
+                      }}>{done?"✓":i+1}</span>
+                      {T("wizStep_"+st.id)}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{fontSize:"0.7rem", color:c.muted, lineHeight:1.5}}>
+                {T("wizHint_"+WIZARD_STEPS[wizStep].id)}
+              </div>
+            </div>
+          )}
+
+          {/* ── WIZARD NAVIGÁCIA — Späť / Ďalej ── */}
+          {simple && (
+            <div style={{
+              order:95, display:"flex", alignItems:"center", gap:"0.75rem",
+              marginTop:"1.5rem", paddingTop:"1rem", borderTop:`1px solid ${c.border}`,
+            }}>
+              <button onClick={()=>gotoWizStep(wizStep-1)} disabled={wizStep===0} style={{
+                background:"transparent", border:`1.5px solid ${wizStep===0?c.border:c.pri}`,
+                borderRadius:8, padding:"0.55rem 1.1rem", cursor:wizStep===0?"default":"pointer",
+                color:wizStep===0?c.muted:c.pri, fontSize:"0.78rem", fontWeight:700,
+                opacity:wizStep===0?0.5:1, minHeight:"unset",
+              }}>← {T("wizBack")}</button>
+              <span style={{flex:1, textAlign:"center", fontSize:"0.68rem", color:c.muted}}>
+                {T("wizStepOf").replace("{a}", wizStep+1).replace("{b}", WIZARD_STEPS.length)}
+              </span>
+              {wizStep<WIZARD_STEPS.length-1 ? (
+                <button onClick={()=>gotoWizStep(wizStep+1)} style={{
+                  background:c.pri, border:"none", borderRadius:8,
+                  padding:"0.55rem 1.35rem", cursor:"pointer",
+                  color:"#fff", fontSize:"0.78rem", fontWeight:700, minHeight:"unset",
+                }}>{T("wizNext")} →</button>
+              ) : (
+                <button onClick={()=>gotoWizStep(0)} style={{
+                  background:"transparent", border:`1.5px solid ${c.pri}`, borderRadius:8,
+                  padding:"0.55rem 1.35rem", cursor:"pointer",
+                  color:c.pri, fontSize:"0.78rem", fontWeight:700, minHeight:"unset",
+                }}>↺ {T("wizRestart")}</button>
+              )}
+            </div>
+          )}
 
           {/* ── ODVETVIE ── */}
-          <div id="blk-info-industry" style={S.block}>
+          <div id="blk-info-industry" style={BLK("info-industry")}>
             <div style={S.secTitle}>Odvetvie a typ projektu<div style={S.divider}/></div>
             {/* Rozbaľovacia hlavička */}
             <button onClick={()=>{ setIndustryOpen(o=>!o); setIndustrySearch(""); }} style={{
@@ -2496,7 +2638,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           </div>
 
           {/* ── PROJEKT ── */}
-          <div id="blk-info-project" style={S.block}>
+          <div id="blk-info-project" style={BLK("info-project")}>
             <div style={S.secTitle}>Projekt<div style={S.divider}/></div>
             <div style={S.fRow}>
               <label style={S.lbl}>Názov projektu / webu</label>
@@ -2506,7 +2648,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           </div>
 
           {/* ── FIREMNÉ ÚDAJE ── */}
-          <div id="blk-info-company" style={S.block}>
+          <div id="blk-info-company" style={BLK("info-company")}>
             <div style={S.secTitle}>Firemné údaje<div style={S.divider}/></div>
             <div style={S.fRow}>
               <label style={S.lbl}>Obchodný názov firmy</label>
@@ -2526,7 +2668,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           </div>
 
           {/* ── ADRESY ── */}
-          <div id="blk-info-address" style={S.block}>
+          <div id="blk-info-address" style={BLK("info-address")}>
             <div style={S.secTitle}>Adresy<div style={S.divider}/><button style={S.addBtn} onClick={addAddress}>+ Pridať</button></div>
             {brief.addresses.map(addr=>(
               <div key={addr.id} style={S.addrCard}>
@@ -2593,7 +2735,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           </div>
 
           {/* ── DETAILY PROJEKTU — technické požiadavky ── */}
-          <div id="blk-info-details" style={S.block}>
+          <div id="blk-info-details" style={BLK("info-details")}>
             <div style={S.secTitle}>Detaily projektu<div style={S.divider}/></div>
             <div style={{fontSize:"0.62rem",fontWeight:600,color:c.muted,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:"0.5rem"}}>Technické požiadavky</div>
 
@@ -2822,7 +2964,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           </div>
 
           {/* ── BRAND LOGO ── */}
-          <div id="blk-brand-logo" style={S.block}>
+          <div id="blk-brand-logo" style={BLK("brand-logo")}>
             <div style={S.secTitle}>Logo firmy<div style={S.divider}/></div>
 
             {/* Mám logo / chcem vytvoriť */}
@@ -2958,7 +3100,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           </div>
 
           {/* ── BRAND PRESET ── */}
-          <div id="blk-brand-preset" style={S.block}>
+          <div id="blk-brand-preset" style={BLK("brand-preset")}>
             <div style={S.secTitle}>Brand — presety<div style={S.divider}/></div>
             {/* Rozbaľovacia hlavička */}
             <button onClick={()=>setPresetOpen(o=>!o)} style={{
@@ -3022,7 +3164,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             )}
           </div>
 
-          <div id="blk-brand-colors" style={S.block}>
+          <div id="blk-brand-colors" style={BLK("brand-colors")}>
             <div style={S.secTitle}>Farby<div style={S.divider}/></div>
             {/* Rozbaľovacia hlavička */}
             <button onClick={()=>setColorsOpen(o=>!o)} style={{
@@ -3058,7 +3200,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             )}
           </div>
 
-          <div id="blk-brand-fonts" style={S.block}>
+          <div id="blk-brand-fonts" style={BLK("brand-fonts")}>
             <div style={S.secTitle}>Typografia<div style={S.divider}/></div>
             {/* Rozbaľovacia hlavička */}
             <button onClick={()=>setFontsOpen(o=>!o)} style={{
@@ -3136,7 +3278,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           </div>
 
           {/* ── BRIEF ── */}
-          <div id="blk-brief-type" style={S.block}>
+          <div id="blk-brief-type" style={BLK("brief-type")}>
             <div style={S.secTitle}>Typ webu<div style={S.divider}/></div>
             <div style={S.typeGrid}>
               {WEB_TYPES.map(tt=>(
@@ -3149,7 +3291,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           </div>
 
           {/* ── ŠTRUKTÚRA STRÁNKY ── */}
-          <div id="blk-brief-structure" style={S.block}>
+          <div id="blk-brief-structure" style={BLK("brief-structure")}>
             <div style={S.secTitle}>Štruktúra stránky<div style={S.divider}/></div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"0.875rem"}}>
               {[
@@ -3211,7 +3353,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           </div>
 
           {/* ── NAVIGÁCIA & TÉMA ── */}
-          <div id="blk-brief-nav" style={S.block}>
+          <div id="blk-brief-nav" style={BLK("brief-nav")}>
             <div style={S.secTitle}>Navigácia & Téma<div style={S.divider}/></div>
 
             {/* Farebná téma */}
@@ -3327,7 +3469,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             </div>
           </div>
 
-          <div id="blk-brief-goal" style={S.block}>
+          <div id="blk-brief-goal" style={BLK("brief-goal")}>
             <div style={S.secTitle}>Cieľ a publikum<div style={S.divider}/></div>
             <div style={S.g2}>
               <div style={S.fRow}><label style={S.lbl}>Cieľ stránky</label><input style={S.inp} placeholder="napr. získať nových klientov…" value={brief.goal} onChange={e=>update({goal:e.target.value})}/></div>
@@ -3336,10 +3478,130 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             <div style={S.fRow}><label style={S.lbl}>Tón a feeling</label><input style={S.inp} placeholder="napr. prémiový, minimalistický, hravý, street…" value={brief.tone} onChange={e=>update({tone:e.target.value})}/></div>
           </div>
 
-          <div id="blk-brief-desc" style={S.block}>
+          <div id="blk-brief-desc" style={BLK("brief-desc")}>
             <div style={S.secTitle}>Popis projektu<div style={S.divider}/></div>
             <div style={S.fRow}><label style={S.lbl}>Popis</label><textarea style={S.ta} placeholder="Opíš čo robíš, čo ťa odlišuje, aké problémy riešiš…" value={brief.brief} onChange={e=>update({brief:e.target.value})}/></div>
             <div style={S.fRow}><label style={S.lbl}>Špeciálne požiadavky <span style={{fontWeight:400,textTransform:"none"}}>(voliteľné)</span></label><textarea style={{...S.ta,minHeight:56}} placeholder="Integrácie, špeciálne funkcie…" value={brief.extra} onChange={e=>update({extra:e.target.value})}/></div>
+          </div>
+
+          {/* ── PODKLADY A SÚBORY — linky od klienta ── */}
+          <div id="blk-assets-files" style={BLK("assets-files")}>
+            <div style={S.secTitle}>Podklady a súbory<div style={S.divider}/></div>
+
+            {/* Návod pre klienta */}
+            <div style={{
+              background:c.card, border:`1px solid ${c.border}`, borderRadius:9,
+              padding:"0.75rem 0.875rem", marginBottom:"0.875rem",
+            }}>
+              <div style={{fontSize:"0.74rem", fontWeight:700, color:c.text, marginBottom:"0.3rem"}}>
+                📎 Ako nám poslať fotky, logo a texty?
+              </div>
+              <div style={{fontSize:"0.66rem", color:c.muted, lineHeight:1.55, marginBottom:"0.5rem"}}>
+                Súbory (aj celý ZIP so všetkými podkladmi) nahrajte na niektorú z bezplatných služieb
+                nižšie a sem vložte odkaz. Čím viac podkladov, tým presnejší bude výsledný web.
+              </div>
+              <div style={{display:"flex", flexWrap:"wrap", gap:"0.35rem"}}>
+                {UPLOAD_SERVICES.map(svc=>(
+                  <a key={svc.name} href={svc.url} target="_blank" rel="noopener noreferrer" style={{
+                    display:"flex", alignItems:"center", gap:"0.3rem",
+                    border:`1px solid ${c.pri}`, borderRadius:20, padding:"0.25rem 0.65rem",
+                    color:c.pri, fontSize:"0.66rem", fontWeight:600, textDecoration:"none",
+                  }} title={svc.note}>
+                    ↗ {svc.name}
+                    <span style={{color:c.muted, fontWeight:400}}>· {svc.note}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Zoznam odkazov */}
+            {(brief.assets||[]).map(asset=>(
+              <div key={asset.id} style={S.addrCard}>
+                <div style={S.addrTypes}>
+                  {ASSET_TYPES.map(at=>(
+                    <button key={at.id} style={S.addrTypeBtn(asset.type===at.id)} onClick={()=>updateAsset(asset.id,"type",at.id)}>
+                      {at.icon} {at.label}
+                    </button>
+                  ))}
+                  <button style={S.removeBtn} onClick={()=>removeAsset(asset.id)}>✕</button>
+                </div>
+                <div style={S.fRow}>
+                  <label style={S.lbl}>Odkaz na súbor / priečinok</label>
+                  <input style={S.inp} placeholder="napr. https://www.uschovna.cz/zasilka/… alebo https://drive.google.com/…"
+                    value={asset.url||""} onChange={e=>updateAsset(asset.id,"url",e.target.value)}/>
+                </div>
+                <div>
+                  <label style={S.lbl}>Poznámka <span style={{fontWeight:400,textTransform:"none"}}>(čo odkaz obsahuje)</span></label>
+                  <input style={S.inp} placeholder="napr. 30 fotiek interiéru + logo v krivkách"
+                    value={asset.note||""} onChange={e=>updateAsset(asset.id,"note",e.target.value)}/>
+                </div>
+              </div>
+            ))}
+
+            <button onClick={()=>addAsset("photos")} style={{
+              background:"transparent", border:`1.5px dashed ${c.pri}`, borderRadius:7,
+              padding:"0.45rem 0.8rem", color:c.pri, fontSize:"0.72rem", fontWeight:600,
+              cursor:"pointer", minHeight:"unset",
+            }}>
+              + Pridať odkaz na podklady
+            </button>
+          </div>
+
+          {/* ── WIZARD — ZHRNUTIE (len jednoduchý režim) ── */}
+          <div id="blk-wiz-summary" style={BLK("wiz-summary")}>
+            <div style={S.secTitle}>{T("wizSummaryTitle")}<div style={S.divider}/></div>
+            {(()=>{
+              const summaryItems = [
+                { label:T("wizSumProject"),  ok: !!(brief.projectName||"").trim(),                         step:0 },
+                { label:T("wizSumIndustry"), ok: !!brief.industry,                                          step:0 },
+                { label:T("wizSumContact"),  ok: !!((brief.email||"").trim()||(brief.phone||"").trim()),    step:0 },
+                { label:T("wizSumDesc"),     ok: !!(brief.brief||"").trim(),                                step:1 },
+                { label:T("wizSumSections"), ok: (brief.sections||[]).length>0, extra:`(${(brief.sections||[]).length})`, step:2 },
+                { label:T("wizSumAssets"),   ok: (brief.assets||[]).some(a=>(a.url||"").trim()), extra:(brief.assets||[]).filter(a=>(a.url||"").trim()).length?`(${(brief.assets||[]).filter(a=>(a.url||"").trim()).length})`:"", step:3 },
+                { label:T("wizSumDesign"),   ok: !!brief.preset,                                            step:4 },
+              ];
+              const missing = summaryItems.filter(x=>!x.ok).length;
+              return (
+                <>
+                  {summaryItems.map((item,i)=>(
+                    <div key={i} style={{
+                      display:"flex", alignItems:"center", gap:"0.6rem",
+                      padding:"0.55rem 0.7rem", marginBottom:"0.35rem",
+                      background:c.card, border:`1px solid ${item.ok?c.pri:c.border}`, borderRadius:8,
+                    }}>
+                      <span style={{
+                        width:20, height:20, borderRadius:"50%", flexShrink:0,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        fontSize:"0.68rem", fontWeight:700,
+                        background:item.ok?`${c.pri}22`:"transparent",
+                        border:`1.5px solid ${item.ok?c.pri:c.border}`,
+                        color:item.ok?c.pri:c.muted,
+                      }}>{item.ok?"✓":"·"}</span>
+                      <span style={{flex:1, fontSize:"0.76rem", color:item.ok?c.text:c.muted}}>
+                        {item.label} {item.extra||""}
+                      </span>
+                      {!item.ok && (
+                        <button onClick={()=>gotoWizStep(item.step)} style={{
+                          background:"transparent", border:`1px solid ${c.pri}`, borderRadius:6,
+                          padding:"0.2rem 0.6rem", color:c.pri, fontSize:"0.66rem", fontWeight:600,
+                          cursor:"pointer", minHeight:"unset",
+                        }}>{T("wizFill")}</button>
+                      )}
+                    </div>
+                  ))}
+                  <div style={{
+                    marginTop:"0.75rem", padding:"0.75rem 0.875rem", borderRadius:9,
+                    background:missing?`${c.pri}10`:"#22c55e18",
+                    border:`1px solid ${missing?c.pri:"#22c55e"}`,
+                    fontSize:"0.72rem", lineHeight:1.55, color:c.text,
+                  }}>
+                    {missing
+                      ? `${T("wizSumMissing")} (${missing})`
+                      : T("wizSumDone")}
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           {/* ── OBSAH — riadky s rozbaľovacím detailom ── */}
@@ -3370,7 +3632,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             };
 
             return (
-              <div key={cat.id} id={"blk-content-"+cat.id} style={S.block}>
+              <div key={cat.id} id={"blk-content-"+cat.id} style={{...S.block, order:CAT_BLOCK_ORDER[cat.id]||10}}>
                 <div style={S.secTitle}>
                   {cat.label}
                   <span style={{background:`${c.pri}20`,color:c.pri,padding:"0.1rem 0.45rem",borderRadius:20,fontSize:"0.62rem",fontWeight:700}}>{n}/{allCatSecs.length}</span>
