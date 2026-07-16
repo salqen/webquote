@@ -21,14 +21,14 @@ import {
 
 // ─── MediaVolt / WebQuote brand tokens ───────────────────────
 const MV = {
-  bg:          "#05060d",
-  surface:     "#0d0e0f",
-  surfaceHigh: "#141516",
-  border:      "#1e1f20",
-  borderHi:    "#2a2b2d",
-  text:        "#f0f0f0",
-  muted:       "#666870",
-  desc:        "#44464a",
+  bg:          "#0a0604",   // teplá tmavá — ako mediavolt.org
+  surface:     "#120b07",
+  surfaceHigh: "#1a1009",
+  border:      "#2a1d12",
+  borderHi:    "#3a2a1a",
+  text:        "#f4ece6",
+  muted:       "#8f8378",
+  desc:        "#6f6459",
   orange:      "#ff6a00",   // volt orange — hlavná farba MediaVolt
   orangeDim:   "#ff6a0022",
   orangeLight: "#ff9540",   // svetlejší odtieň
@@ -907,8 +907,7 @@ function SessionApp({ sessionId, isAdmin }) {
     <>
       {/* Globálne štýly */}
       <style>{`
-        body { background: ${MV.bg}; }
-        * { font-family: 'Space Grotesk', system-ui, sans-serif !important; }
+        body { background: ${MV.bg}; font-family: 'Space Grotesk', system-ui, sans-serif; }
         body::after {
           content:''; position:fixed; inset:0; pointer-events:none; z-index:9990;
           background:repeating-linear-gradient(

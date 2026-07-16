@@ -125,37 +125,14 @@ export async function dbRenameSession(oldId, newId) {
 
 
 // ─── THEME ────────────────────────────────────────────────
-const THEMES = {
-  dark: {
-    bg:"#05060d", panel:"#0c0d1a", card:"#12142a",
-    border:"#1a1c35", text:"#e8eef5", muted:"#5a6080", subtle:"#1a1c35",
-    inpBg:"#0c0d1a", cardActive:"#12142a", codeBg:"#05060d", codeText:"#ff6a00", checkbox:"#ff6a00", desc:"#5a6080",
-  },
-  light: {
-    bg:"#f8f6f2", panel:"#f0ede8", card:"#e8e4df",
-    border:"#d5d0ca", text:"#1a1a1a", muted:"#888", subtle:"#ccc",
-    inpBg:"#f4f1ec", cardActive:"#ebe7e1", codeBg:"#eeeae4", codeText:"#2d6e3e", checkbox:"#888", desc:"#6a6a6a",
-  },
+// Fixná MediaVolt paleta — teplá tmavá (volt orange #ff6a00).
+// UI appky sa už NEprefarbuje podľa vybratej farebnej témy briefu.
+const MV_THEME = {
+  bg:"#0a0604", panel:"#120b07", card:"#1a1009",
+  border:"#2a1d12", text:"#f4ece6", muted:"#8f8378", subtle:"#2a1d12",
+  inpBg:"#120b07", cardActive:"#22150c", codeBg:"#0a0604", codeText:"#ff9540", checkbox:"#ff6a00", desc:"#6f6459",
 };
-
-function ThemeToggle({ theme, setTheme }) {
-  const isDark = theme === "dark";
-  return (
-    <button
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      title={isDark ? "Svetlá téma" : "Tmavá téma"}
-      style={{
-        background:"transparent",
-        border:`1px solid ${isDark?"#2a2a2a":"#d5d0ca"}`,
-        borderRadius:8, padding:"0.3rem 0.625rem", cursor:"pointer",
-        fontSize:"0.85rem", display:"flex", alignItems:"center", gap:"0.375rem",
-        color:isDark?"#888":"#666", transition:"all .15s", minHeight:"unset",
-      }}>
-      {isDark ? "☀️" : "🌙"}
-      <span style={{fontSize:"0.68rem",fontWeight:500}}>{isDark?"Svetlá":"Tmavá"}</span>
-    </button>
-  );
-}
+const THEMES = { dark: MV_THEME, light: MV_THEME };
 
 // ─── DATA ─────────────────────────────────────────────────
 
@@ -1553,7 +1530,8 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
 
   const [fontPicker, setFontPicker] = useState(null); // "fontDisplay" | "fontBody" | null
 
-  const c  = { ...THEMES[theme], pri: brief.brand.primary };
+  // Fixný MediaVolt accent — nezávisí od vybratej farebnej témy briefu
+  const c  = { ...MV_THEME, pri: "#ff6a00" };
   const br = brief.brand;
 
   const selectType    = (id)    => update({ webType:id, sections:TYPE_DEFAULTS[id] });
@@ -1706,9 +1684,9 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   const orderedSecs = brief.sections.map(id=>SECTIONS.find(s=>s.id===id)).filter(Boolean);
 
   const S = {
-    root:   { height:"100vh", background:c.bg, color:c.text, fontFamily:"'Inter',system-ui,sans-serif", fontSize:13, transition:"background .2s,color .2s", display:"flex", flexDirection:"column" },
+    root:   { height:"100vh", background:c.bg, color:c.text, fontFamily:"'Space Grotesk',system-ui,sans-serif", fontSize:13, transition:"background .2s,color .2s", display:"flex", flexDirection:"column" },
     header: { background:c.panel, borderBottom:`1px solid ${c.border}`, padding:"0.7rem 1.25rem", display:"flex", alignItems:"center", gap:"0.75rem", flexShrink:0 },
-    logo:   { fontWeight:800, fontSize:"0.9rem", letterSpacing:"-0.02em", color:c.text },
+    logo:   { fontWeight:800, fontSize:"0.9rem", letterSpacing:"-0.02em", color:c.text, fontFamily:"'Syne','Space Grotesk',sans-serif" },
     adminBadge:{ background:`${c.pri}20`, color:c.pri, fontSize:"0.62rem", fontWeight:700, padding:"0.2rem 0.55rem", borderRadius:20, letterSpacing:"0.06em" },
     hRight: { display:"flex", alignItems:"center", gap:"0.625rem", marginLeft:"auto" },
     live:   { display:"flex", alignItems:"center", gap:"0.35rem", fontSize:"0.68rem", color:"#22c55e" },
@@ -2287,7 +2265,6 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             {simple ? "✨ "+T("simpleMode") : "⚙️ "+T("expertMode")}
           </button>
           <div style={S.live}><div style={S.liveDot}/>Live</div>
-          <ThemeToggle theme={theme} setTheme={setTheme}/>
           {!isMobile && <span style={S.badge}>#{sessionId}</span>}
         </div>
       </div>
