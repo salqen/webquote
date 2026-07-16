@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slider 5 — 3D kocka</title>
+<style>
+  :root{--ease:cubic-bezier(.65,0,.35,1)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:#0c0c0f;min-height:100vh;
+    display:flex;align-items:center;justify-content:center;padding:24px;
+  }
+  .stage{
+    position:relative;width:min(100%,1100px);aspect-ratio:16/9;
+    perspective:1600px;
+  }
+  .cube{
+    position:absolute;inset:0;transform-style:preserve-3d;
+    transition:transform 1.1s var(--ease);
+  }
+  .face{
+    position:absolute;inset:0;backface-visibility:hidden;
+    border-radius:16px;overflow:hidden;
+    display:flex;flex-direction:column;justify-content:flex-end;
+    padding:clamp(24px,5vw,60px);gap:10px;
+    box-shadow:0 30px 80px rgba(0,0,0,.55);
+  }
+  .face:nth-child(1){background:linear-gradient(135deg,#7b3fe4,#2a2360 60%,#0e0e12)}
+  .face:nth-child(2){background:linear-gradient(135deg,#e23b3b,#5a0d0d 55%,#111)}
+  .face:nth-child(3){background:linear-gradient(135deg,#14b8a6,#0e4a44 55%,#0c0c0f)}
+  .face:nth-child(4){background:linear-gradient(135deg,#caa24a,#5e4410 55%,#0e0e0e)}
+  .kicker{font-size:clamp(12px,1.4vw,16px);font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+  .face h2{font-size:clamp(28px,4.5vw,60px);font-weight:900;color:#fff;letter-spacing:-.02em;line-height:1}
+  .face p{font-size:clamp(14px,1.6vw,18px);color:rgba(255,255,255,.75);max-width:52ch}
+  .nav{
+    position:absolute;bottom:-64px;left:50%;transform:translateX(-50%);
+    display:flex;gap:14px;align-items:center;
+  }
+  .nav button{
+    width:46px;height:46px;border-radius:50%;border:2px solid rgba(255,255,255,.25);
+    background:transparent;color:#fff;font-size:19px;cursor:pointer;transition:.3s;
+  }
+  .nav button:hover{background:#fff;color:#111;border-color:#fff}
+  .counter{color:rgba(255,255,255,.6);font-weight:700;font-size:14px;letter-spacing:.15em;min-width:64px;text-align:center}
+  .label{position:absolute;top:-34px;left:0;color:rgba(255,255,255,.7);font-size:13px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <span class="label">3D Kocka</span>
+    <div class="cube" id="cube">
+      <div class="face">
+        <div class="kicker">Kapitola 01</div>
+        <h2>Otoč svet</h2>
+        <p>Každý slide je stenou kocky — prechod pôsobí ako otočenie skutočného objektu v priestore.</p>
+      </div>
+      <div class="face">
+        <div class="kicker">Kapitola 02</div>
+        <h2>Hĺbka a perspektíva</h2>
+        <p>Perspektíva 1600px dáva rotácii prirodzenú hĺbku bez skreslenia obsahu.</p>
+      </div>
+      <div class="face">
+        <div class="kicker">Kapitola 03</div>
+        <h2>Plynulý pohyb</h2>
+        <p>Cubic-bezier easing spomalí dopad rotácie, takže kocka „dosadne" jemne.</p>
+      </div>
+      <div class="face">
+        <div class="kicker">Kapitola 04</div>
+        <h2>Nekonečná slučka</h2>
+        <p>Rotácia pokračuje stále rovnakým smerom — žiadne pretáčanie späť.</p>
+      </div>
+    </div>
+    <div class="nav">
+      <button id="prev" aria-label="Predchádzajúci">←</button>
+      <span class="counter" id="counter">01 / 04</span>
+      <button id="next" aria-label="Ďalší">→</button>
+    </div>
+  </div>
+<script>
+  const cube=document.getElementById('cube');
+  const counter=document.getElementById('counter');
+  const faces=[...cube.children];
+  const n=faces.length;
+  // depth = half of stage width; computed on resize
+  let depth=0,angle=0,i=0,timer;
+  function layout(){
+    depth=cube.clientWidth/2;
+    faces.forEach((f,k)=>{
+      f.style.transform=`rotateY(${k*90}deg) translateZ(${depth}px)`;
+    });
+    apply(false);
+  }
+  function apply(animate=true){
+    cube.style.transition=animate?'':'none';
+    cube.style.transform=`translateZ(${-depth}px) rotateY(${angle}deg)`;
+    if(!animate)requestAnimationFrame(()=>cube.style.transition='');
+    counter.textContent=String(i+1).padStart(2,'0')+' / '+String(n).padStart(2,'0');
+  }
+  function go(dir){
+    angle-=dir*90;
+    i=((i+dir)%n+n)%n;
+    apply();
+    restart();
+  }
+  document.getElementById('next').onclick=()=>go(1);
+  document.getElementById('prev').onclick=()=>go(-1);
+  function restart(){clearInterval(timer);timer=setInterval(()=>go(1),5500)}
+  window.addEventListener('resize',layout);
+  layout();restart();
+</script>
+</body>
+</html>

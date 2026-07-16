@@ -248,6 +248,19 @@ Ground rules:
     hero.push(`- **Style:** ${HERO_STYLES[b.heroStyle] || HERO_STYLES.minimal}`);
     if (b.heroMedia && b.heroMedia !== "none") {
       hero.push(`- **Media:** ${HERO_MEDIA[b.heroMedia]}${isUrl(b.heroMediaUrl) ? ` — reference: ${clean(b.heroMediaUrl)}` : ""}`);
+      if (b.heroMedia === "carousel" && b.heroSlider) {
+        const SLIDER_TYPES = {
+          fade:"Fade / cross-dissolve transition between slides",
+          slide:"Classic horizontal slide transition",
+          coverflow:"3D coverflow effect (Apple-style)",
+          kenburns:"Ken Burns — slow zoom & pan on each image",
+          cube:"3D rotating cube transition",
+          split:"Split transition — slide splits into halves",
+          circle:"Circular reveal transition",
+          cards:"Stacked cards transition",
+        };
+        hero.push(`- **Slider type:** ${SLIDER_TYPES[b.heroSlider] || b.heroSlider} — implement the hero carousel with exactly this transition style, autoplay ~4s, dot navigation, pause on manual interaction.`);
+      }
     } else {
       hero.push(`- **Media:** ${HERO_MEDIA.none}`);
     }
