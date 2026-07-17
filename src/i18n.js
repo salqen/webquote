@@ -79,7 +79,7 @@ const ACC_SUB = {
   "brand-fonts":    { en:"Typography",        cs:"Typografie",       de:"Typografie" },
   "brief-type":     { en:"Website type",      cs:"Typ webu",         de:"Website-Typ" },
   "brief-structure":{ en:"Page structure",    cs:"Struktura stránky",de:"Seitenstruktur" },
-  "brief-nav":      { en:"Navigation & Theme",cs:"Navigace & Téma",  de:"Navigation & Theme" },
+  "brief-nav":      { en:"Theme",             cs:"Téma",             de:"Theme" },
   "brief-goal":     { en:"Goal & audience",   cs:"Cíl a publikum",   de:"Ziel & Zielgruppe" },
   "brief-desc":     { en:"Project description",cs:"Popis projektu",  de:"Projektbeschreibung" },
   "content-core":   { en:"Core",              cs:"Základ",           de:"Basis" },
@@ -99,7 +99,10 @@ const WT = {
 
 // ── ODVETVIA — skupinové labely (subs EN cez industryData.en) ─
 const IND = {
+  agro:          { en:"Agriculture & Food",     cs:"Zemědělství & Potraviny", de:"Landwirtschaft & Lebensmittel" },
   automotive:    { en:"Automotive",             cs:"Automotive",            de:"Automotive" },
+  crafts:        { en:"Trades & Home Services", cs:"Řemesla & Domácí služby", de:"Handwerk & Hausservice" },
+  media:         { en:"Media & Entertainment",  cs:"Média & Zábava",        de:"Medien & Unterhaltung" },
   creative:      { en:"Creative & Arts",        cs:"Kreativa & Umění",      de:"Kreativ & Kunst" },
   ecommerce:     { en:"E-commerce",             cs:"E-commerce",            de:"E-Commerce" },
   education:     { en:"Education",              cs:"Vzdělávání",            de:"Bildung" },
