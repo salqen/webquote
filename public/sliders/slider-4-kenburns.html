@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slider 4 — Ken Burns + text</title>
+<style>
+  :root{--ease:cubic-bezier(.4,0,.2,1)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:#0c0c0f;min-height:100vh;
+    display:flex;align-items:center;justify-content:center;padding:24px;
+  }
+  .slider{
+    position:relative;width:min(100%,1280px);aspect-ratio:16/9;
+    border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6);
+  }
+  .slide{
+    position:absolute;inset:0;opacity:0;
+    transition:opacity 1.1s var(--ease);pointer-events:none;
+  }
+  .slide.active{opacity:1;pointer-events:auto}
+  .bg{position:absolute;inset:0;transform:scale(1.05)}
+  .slide.active .bg{animation:ken 7s linear forwards}
+  @keyframes ken{from{transform:scale(1.05)}to{transform:scale(1.22) translate(-2%,-1%)}}
+  .slide:nth-child(1) .bg{background:linear-gradient(135deg,#caa24a,#5e4410 45%,#0e0e0e)}
+  .slide:nth-child(2) .bg{background:linear-gradient(135deg,#e23b3b,#5a0d0d 45%,#111)}
+  .slide:nth-child(3) .bg{background:linear-gradient(135deg,#2b56c4,#1d2f6b 40%,#e08a1e)}
+  .slide:nth-child(4) .bg{background:linear-gradient(135deg,#d11f2d,#3a3a3f 55%,#0d0d0d)}
+  .slide:nth-child(5) .bg{background:linear-gradient(135deg,#7b3fe4,#2a2360 45%,#14b8a6)}
+  .overlay{
+    position:absolute;inset:0;
+    background:linear-gradient(90deg,rgba(0,0,0,.65) 0%,rgba(0,0,0,.25) 45%,transparent 75%);
+    display:flex;flex-direction:column;justify-content:center;
+    padding:0 clamp(28px,7vw,90px);gap:14px;
+  }
+  .pageno{
+    font-size:clamp(60px,11vw,150px);font-weight:900;line-height:.9;
+    color:#fff;letter-spacing:-.04em;
+    transform:translateY(20px);opacity:0;transition:.7s var(--ease) .2s;
+  }
+  .title{
+    font-size:clamp(22px,3.2vw,44px);font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.02em;
+    transform:translateY(20px);opacity:0;transition:.7s var(--ease) .35s;
+  }
+  .date{
+    font-size:clamp(13px,1.5vw,18px);font-weight:600;color:rgba(255,255,255,.8);letter-spacing:.16em;text-transform:uppercase;
+    transform:translateY(20px);opacity:0;transition:.7s var(--ease) .5s;
+  }
+  .cta{
+    margin-top:10px;align-self:flex-start;
+    padding:13px 30px;border-radius:999px;border:0;cursor:pointer;
+    font-weight:800;font-size:15px;letter-spacing:.04em;text-transform:uppercase;
+    background:#fff;color:#111;
+    transform:translateY(20px);opacity:0;transition:.7s var(--ease) .65s,filter .2s;
+  }
+  .cta:hover{filter:brightness(.9)}
+  .slide.active .pageno,.slide.active .title,.slide.active .date,.slide.active .cta{transform:translateY(0);opacity:1}
+  .dots{position:absolute;bottom:20px;right:24px;display:flex;gap:10px;z-index:5}
+  .dots button{width:11px;height:11px;border-radius:50%;border:0;cursor:pointer;background:rgba(255,255,255,.35);transition:all .3s}
+  .dots button.active{background:#fff;width:30px;border-radius:6px}
+  .label{position:absolute;top:18px;left:22px;z-index:5;color:rgba(255,255,255,.7);font-size:13px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+</style>
+</head>
+<body>
+  <div class="slider" id="slider">
+    <div class="slide active">
+      <div class="bg"></div>
+      <div class="overlay">
+        <div class="pageno">01</div>
+        <div class="title">Strana jeden</div>
+        <div class="date">Dátum · Miesto</div>
+        <button class="cta">Kúpiť lístky</button>
+      </div>
+    </div>
+    <div class="slide">
+      <div class="bg"></div>
+      <div class="overlay">
+        <div class="pageno">02</div>
+        <div class="title">Strana dva</div>
+        <div class="date">Dátum · Miesto</div>
+        <button class="cta">Kúpiť lístky</button>
+      </div>
+    </div>
+    <div class="slide">
+      <div class="bg"></div>
+      <div class="overlay">
+        <div class="pageno">03</div>
+        <div class="title">Strana tri</div>
+        <div class="date">Dátum · Miesto</div>
+        <button class="cta">Kúpiť lístky</button>
+      </div>
+    </div>
+    <div class="slide">
+      <div class="bg"></div>
+      <div class="overlay">
+        <div class="pageno">04</div>
+        <div class="title">Strana štyri</div>
+        <div class="date">Dátum · Miesto</div>
+        <button class="cta">Kúpiť lístky</button>
+      </div>
+    </div>
+    <div class="slide">
+      <div class="bg"></div>
+      <div class="overlay">
+        <div class="pageno">05</div>
+        <div class="title">Strana päť</div>
+        <div class="date">Dátum · Miesto</div>
+        <button class="cta">Kúpiť lístky</button>
+      </div>
+    </div>
+    <span class="label">Ken Burns · Text</span>
+    <div class="dots" id="dots"></div>
+  </div>
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const dotsWrap=document.getElementById('dots');
+  let i=0,timer;
+  slides.forEach((_,n)=>{
+    const b=document.createElement('button');
+    if(n===0)b.classList.add('active');
+    b.onclick=()=>go(n,true);
+    dotsWrap.appendChild(b);
+  });
+  const dots=[...dotsWrap.children];
+  function go(n,manual){
+    slides[i].classList.remove('active');dots[i].classList.remove('active');
+    i=(n+slides.length)%slides.length;
+    slides[i].classList.add('active');dots[i].classList.add('active');
+    if(manual)restart();
+  }
+  function start(){timer=setInterval(()=>go(i+1),5000)}
+  function restart(){clearInterval(timer);start()}
+  start();
+</script>
+</body>
+</html>

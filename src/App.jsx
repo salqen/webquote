@@ -21,14 +21,14 @@ import {
 
 // ─── MediaVolt / WebQuote brand tokens ───────────────────────
 const MV = {
-  bg:          "#05060d",
-  surface:     "#0d0e0f",
-  surfaceHigh: "#141516",
-  border:      "#1e1f20",
-  borderHi:    "#2a2b2d",
-  text:        "#f0f0f0",
-  muted:       "#666870",
-  desc:        "#44464a",
+  bg:          "#0a0604",   // teplá tmavá — ako mediavolt.org
+  surface:     "#120b07",
+  surfaceHigh: "#1a1009",
+  border:      "#2a1d12",
+  borderHi:    "#3a2a1a",
+  text:        "#f4ece6",
+  muted:       "#8f8378",
+  desc:        "#6f6459",
   orange:      "#ff6a00",   // volt orange — hlavná farba MediaVolt
   orangeDim:   "#ff6a0022",
   orangeLight: "#ff9540",   // svetlejší odtieň
@@ -538,7 +538,20 @@ function AdminFlowPanel({ sessionId, projectName }) {
   const [renaming, setRenaming] = useState(false);
   const [renameVal, setRenameVal] = useState(sessionId);
   const [renameErr, setRenameErr] = useState(false);
+  const panelRef = useRef(null);
   const clientUrl = `${window.location.origin}/?session=${sessionId}`;
+
+  // Reálna výška panelu → CSS premenná --wq-admin-h.
+  // Obsah pod panelom sa odsadí presne — menu sa nikdy neprekryje s lištou linku.
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const setH = () => document.documentElement.style.setProperty("--wq-admin-h", el.offsetHeight + "px");
+    setH();
+    const ro = new ResizeObserver(setH);
+    ro.observe(el);
+    return () => { ro.disconnect(); document.documentElement.style.removeProperty("--wq-admin-h"); };
+  }, []);
 
   const copy = () => {
     navigator.clipboard.writeText(clientUrl);
@@ -565,7 +578,7 @@ function AdminFlowPanel({ sessionId, projectName }) {
   };
 
   return (
-    <div style={{
+    <div ref={panelRef} style={{
       position:"fixed", top:0, left:0, right:0, zIndex:9997,
       background:`${MV.bg}f5`, borderBottom:`1px solid ${MV.borderHi}`,
       backdropFilter:"blur(12px)",
@@ -900,6 +913,16 @@ function SessionApp({ sessionId, isAdmin }) {
     setBrief(prev => ({ ...prev, ...patch }));
   }, []);
 
+  // Manuálne uloženie — okamžite, bez čakania na debounce
+  const saveNow = useCallback(async () => {
+    if (!hasSupabase) return;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = null;
+    setSaveState("saving");
+    const ok = await dbSaveSession(sessionId, briefRef.current);
+    setSaveState(ok ? "saved" : "error");
+  }, [sessionId]);
+
   // Kým sa nenačíta uložený stav, needituj — inak by load prepísal zmeny
   if (!loaded) return <SessionLoader />;
 
@@ -907,8 +930,7 @@ function SessionApp({ sessionId, isAdmin }) {
     <>
       {/* Globálne štýly */}
       <style>{`
-        body { background: ${MV.bg}; }
-        * { font-family: 'Space Grotesk', system-ui, sans-serif !important; }
+        body { background: ${MV.bg}; font-family: 'Space Grotesk', system-ui, sans-serif; }
         body::after {
           content:''; position:fixed; inset:0; pointer-events:none; z-index:9990;
           background:repeating-linear-gradient(
@@ -924,8 +946,8 @@ function SessionApp({ sessionId, isAdmin }) {
       {/* Admin flow panel (zbaletelný, s krokmi + link pre klienta) */}
       {isAdmin && <AdminFlowPanel sessionId={sessionId} projectName={brief.projectName} />}
 
-      {/* Builder — odsadenie pre admin panel (rozbalený ~130px, zbalený ~36px) */}
-      <div style={{paddingTop: isAdmin ? 148 : 0}}>
+      {/* Builder — odsadenie presne podľa reálnej výšky admin panelu (--wq-admin-h) */}
+      <div style={{paddingTop: isAdmin ? "var(--wq-admin-h, 148px)" : 0}}>
         <BuilderView
           sessionId={sessionId}
           brief={brief}
@@ -933,11 +955,10 @@ function SessionApp({ sessionId, isAdmin }) {
           theme={theme}
           setTheme={setTheme}
           isAdmin={isAdmin}
+          saveState={saveState}
+          onSaveNow={saveNow}
         />
       </div>
-
-      <SaveBadge state={saveState} />
-      <PoweredByBadge />
     </>
   );
 }
@@ -962,3 +983,4 @@ export default function App() {
   const app = <SessionApp sessionId={sessionParam} isAdmin={isAdmin} />;
   return isAdmin ? <AdminGate>{app}</AdminGate> : app;
 }
+// EOF

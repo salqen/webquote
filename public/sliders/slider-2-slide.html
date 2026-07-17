@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slider 2 — Slide / Posuvný</title>
+<style>
+  :root{--radius:16px;--ease:cubic-bezier(.45,0,.15,1)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:#0c0c0f;min-height:100vh;
+    display:flex;align-items:center;justify-content:center;padding:24px;
+  }
+  .slider{
+    position:relative;width:min(100%,1280px);aspect-ratio:16/9;
+    border-radius:var(--radius);overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.6);
+  }
+  .track{display:flex;height:100%;transition:transform .7s var(--ease)}
+  .slide{
+    min-width:100%;height:100%;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .slide:nth-child(1){background:linear-gradient(135deg,#caa24a,#5e4410 45%,#0e0e0e)}
+  .slide:nth-child(2){background:linear-gradient(135deg,#e23b3b,#5a0d0d 45%,#111)}
+  .slide:nth-child(3){background:linear-gradient(135deg,#2b56c4,#1d2f6b 40%,#e08a1e)}
+  .slide:nth-child(4){background:linear-gradient(135deg,#d11f2d,#3a3a3f 55%,#0d0d0d)}
+  .slide:nth-child(5){background:linear-gradient(135deg,#7b3fe4,#2a2360 45%,#14b8a6)}
+  .num{
+    font-size:clamp(80px,18vw,260px);font-weight:900;color:rgba(255,255,255,.92);
+    line-height:1;letter-spacing:-.04em;text-shadow:0 8px 40px rgba(0,0,0,.45);
+  }
+  .arrow{
+    position:absolute;top:50%;transform:translateY(-50%);z-index:5;
+    width:54px;height:54px;border-radius:50%;border:0;cursor:pointer;
+    background:rgba(0,0,0,.4);backdrop-filter:blur(6px);
+    color:#fff;font-size:24px;display:grid;place-items:center;
+    transition:background .25s;
+  }
+  .arrow:hover{background:rgba(0,0,0,.7)}
+  .prev{left:18px}.next{right:18px}
+  .dots{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:5}
+  .dots button{width:11px;height:11px;border-radius:50%;border:0;cursor:pointer;background:rgba(255,255,255,.35);transition:all .3s}
+  .dots button.active{background:#fff;width:30px;border-radius:6px}
+  .label{position:absolute;top:18px;left:22px;z-index:5;color:rgba(255,255,255,.75);font-size:13px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+</style>
+</head>
+<body>
+  <div class="slider" id="slider">
+    <div class="track" id="track">
+      <div class="slide"><span class="num">1</span></div>
+      <div class="slide"><span class="num">2</span></div>
+      <div class="slide"><span class="num">3</span></div>
+      <div class="slide"><span class="num">4</span></div>
+      <div class="slide"><span class="num">5</span></div>
+    </div>
+    <span class="label">Slide · Posuvný</span>
+    <button class="arrow prev" id="prev">‹</button>
+    <button class="arrow next" id="next">›</button>
+    <div class="dots" id="dots"></div>
+  </div>
+<script>
+  const track=document.getElementById('track');
+  const total=track.children.length;
+  const dotsWrap=document.getElementById('dots');
+  let i=0,timer;
+  for(let n=0;n<total;n++){
+    const b=document.createElement('button');
+    if(n===0)b.classList.add('active');
+    b.onclick=()=>go(n,true);
+    dotsWrap.appendChild(b);
+  }
+  const dots=[...dotsWrap.children];
+  function go(n,manual){
+    i=(n+total)%total;
+    track.style.transform=`translateX(-${i*100}%)`;
+    dots.forEach((d,k)=>d.classList.toggle('active',k===i));
+    if(manual)restart();
+  }
+  document.getElementById('next').onclick=()=>go(i+1,true);
+  document.getElementById('prev').onclick=()=>go(i-1,true);
+  function start(){timer=setInterval(()=>go(i+1),4500)}
+  function restart(){clearInterval(timer);start()}
+  // swipe
+  let x0=null;
+  const s=document.getElementById('slider');
+  s.addEventListener('touchstart',e=>x0=e.touches[0].clientX,{passive:true});
+  s.addEventListener('touchend',e=>{
+    if(x0===null)return;
+    const dx=e.changedTouches[0].clientX-x0;
+    if(Math.abs(dx)>40)go(i+(dx<0?1:-1),true);
+    x0=null;
+  });
+  start();
+</script>
+</body>
+</html>
