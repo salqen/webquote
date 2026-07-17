@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slider 1 — Fade / Cross-dissolve</title>
+<style>
+  :root{
+    --radius:16px;
+    --ease:cubic-bezier(.4,0,.2,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:#0c0c0f;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .slider{
+    position:relative;
+    width:min(100%,1280px);
+    aspect-ratio:16/9;
+    border-radius:var(--radius);
+    overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.6);
+  }
+  .slide{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    opacity:0;
+    transition:opacity .9s var(--ease);
+    pointer-events:none;
+  }
+  .slide.active{opacity:1;pointer-events:auto}
+  .slide:nth-child(1){background:linear-gradient(135deg,#caa24a 0%,#5e4410 45%,#0e0e0e 100%)}
+  .slide:nth-child(2){background:linear-gradient(135deg,#e23b3b 0%,#5a0d0d 45%,#111 100%)}
+  .slide:nth-child(3){background:linear-gradient(135deg,#2b56c4 0%,#1d2f6b 40%,#e08a1e 100%)}
+  .slide:nth-child(4){background:linear-gradient(135deg,#d11f2d 0%,#3a3a3f 55%,#0d0d0d 100%)}
+  .slide:nth-child(5){background:linear-gradient(135deg,#7b3fe4 0%,#2a2360 45%,#14b8a6 100%)}
+  .num{
+    font-size:clamp(80px,18vw,260px);
+    font-weight:900;
+    color:rgba(255,255,255,.92);
+    line-height:1;
+    letter-spacing:-.04em;
+    text-shadow:0 8px 40px rgba(0,0,0,.45);
+    transform:translateY(12px);
+    transition:transform .9s var(--ease);
+  }
+  .slide.active .num{transform:translateY(0)}
+  .dots{
+    position:absolute;
+    bottom:20px;left:50%;
+    transform:translateX(-50%);
+    display:flex;gap:10px;z-index:5;
+  }
+  .dots button{
+    width:11px;height:11px;border-radius:50%;
+    border:0;cursor:pointer;
+    background:rgba(255,255,255,.35);
+    transition:all .3s var(--ease);
+  }
+  .dots button.active{background:#fff;width:30px;border-radius:6px}
+  .label{
+    position:absolute;top:18px;left:22px;z-index:5;
+    color:rgba(255,255,255,.75);
+    font-size:13px;letter-spacing:.18em;text-transform:uppercase;
+    font-weight:700;
+  }
+</style>
+</head>
+<body>
+  <div class="slider" id="slider">
+    <div class="slide active"><span class="num">1</span></div>
+    <div class="slide"><span class="num">2</span></div>
+    <div class="slide"><span class="num">3</span></div>
+    <div class="slide"><span class="num">4</span></div>
+    <div class="slide"><span class="num">5</span></div>
+    <span class="label">Fade · Cross-dissolve</span>
+    <div class="dots" id="dots"></div>
+  </div>
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const dotsWrap=document.getElementById('dots');
+  let i=0,timer;
+  slides.forEach((_,n)=>{
+    const b=document.createElement('button');
+    if(n===0)b.classList.add('active');
+    b.onclick=()=>go(n,true);
+    dotsWrap.appendChild(b);
+  });
+  const dots=[...dotsWrap.children];
+  function go(n,manual){
+    slides[i].classList.remove('active');dots[i].classList.remove('active');
+    i=(n+slides.length)%slides.length;
+    slides[i].classList.add('active');dots[i].classList.add('active');
+    if(manual)restart();
+  }
+  function next(){go(i+1)}
+  function start(){timer=setInterval(next,4000)}
+  function restart(){clearInterval(timer);start()}
+  start();
+</script>
+</body>
+</html>
