@@ -2000,7 +2000,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
 
   const [activeSub, setActiveSub] = useState("info-project");
   const [openAcc, setOpenAcc]     = useState({ info:true, brief:false, content:false, assets:false, brand:false, tech:false });
-  const [rightMode, setRightMode] = useState("wireframe"); // wireframe | prompt | code
+  const [rightMode, setRightMode] = useState("webview"); // webview | wireframe | prompt | code
   const [copied, setCopied]       = useState(false);
   const [expandedSec, setExpSec]  = useState(null); // id of section with open detail panel
   const [presetOpen, setPresetOpen] = useState(false);
@@ -2453,10 +2453,10 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
 
   const RightModeRow = () => (
     <div style={S.rModeRow}>
+      <button style={S.rModeBtn(rightMode==="webview")} onClick={()=>setRightMode("webview")}>{T("webPreview")}</button>
       <button style={S.rModeBtn(rightMode==="wireframe")} onClick={()=>setRightMode("wireframe")}>Náhľad</button>
       <button style={S.rModeBtn(rightMode==="template")} onClick={()=>setRightMode("template")}>Šablóna</button>
       {isAdmin && <button style={S.rModeBtn(rightMode==="prompt")} onClick={()=>setRightMode("prompt")}>Prompt</button>}
-      {isAdmin && <button style={S.rModeBtn(rightMode==="webview")} onClick={()=>setRightMode("webview")}>{T("webPreview")}</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="code")} onClick={()=>setRightMode("code")}>Kód</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="notes")} onClick={()=>setRightMode("notes")}>Poznámky</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="tools")} onClick={()=>setRightMode("tools")}>Nástroje</button>}
@@ -2614,7 +2614,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
         <button style={S.copyBtn} onClick={copyOut}>{copied?"✓ Skopírované":"Kopírovať prompt"}</button>
         <div style={S.codeBox}>{prompt}</div>
       </>)}
-      {rightMode==="webview" && isAdmin && DevicePreviews()}
+      {rightMode==="webview" && DevicePreviews()}
       {rightMode==="code" && isAdmin && (<>
         <button style={S.copyBtn} onClick={copyOut}>{copied?"✓ Skopírované":"Kopírovať kód"}</button>
         <div style={S.codeBox}>{code}</div>
