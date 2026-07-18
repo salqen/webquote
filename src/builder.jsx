@@ -2034,7 +2034,30 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
     window.addEventListener("pointerup", onUp);
   };
   const [isMobile, setIsMobile]   = useState(typeof window!=="undefined" && window.innerWidth<860);
-  const [mobilePane, setMobilePane] = useState("form"); // mobile: nav | form | preview
+  const [mobilePane, setMobilePane] = useState("form"); // mobile: nav | form
+  // Mobil: web náhľad ako vysúvacia lišta (bottom sheet) nad formulárom
+  const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
+  const [drawerDragY, setDrawerDragY]       = useState(0);
+  const [drawerDragging, setDrawerDragging] = useState(false);
+  const startDrawerDrag = (e) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    let lastDy = 0;
+    setDrawerDragging(true);
+    const onMove = (ev) => {
+      lastDy = Math.max(0, ev.clientY - startY);
+      setDrawerDragY(lastDy);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setDrawerDragging(false);
+      if (lastDy > 90) setMobilePreviewOpen(false);
+      setDrawerDragY(0);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
 
   useEffect(()=>{
     const onResize=()=>{
@@ -3043,7 +3066,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
         <div style={S.mobileTabs}>
           {!simple && <button style={S.mobileTab(mobilePane==="nav")} onClick={()=>setMobilePane("nav")}>☰ Menu</button>}
           <button style={S.mobileTab(mobilePane==="form"||(simple&&mobilePane==="nav"))} onClick={()=>setMobilePane("form")}>📝 Formulár</button>
-          <button style={S.mobileTab(mobilePane==="preview")} onClick={()=>setMobilePane("preview")}>👁 Náhľad</button>
+          <button style={S.mobileTab(mobilePreviewOpen)} onClick={()=>setMobilePreviewOpen(o=>!o)}>👁 Náhľad</button>
         </div>
       )}
 
@@ -5100,16 +5123,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
         </div>
         )}
 
-        {/* RIGHT — mobil: len keď je preview tab */}
-        {(isMobile && mobilePane==="preview") && (
-        <div style={S.right}>
-          {RightControlRow()}
-          {RightModeRow()}
-          {RightBody()}
-        </div>
-        )}
-
-        {/* RIGHT — desktop: full, wide, rail (overlay sa renderuje samostatne nižšie) */}
+        {/* RIGHT — desktop: full, wide, rail (overlay sa renderuje samostatne nižšie); na mobile je náhľad vysúvacia lišta (viď nižšie) */}
         {!isMobile && rightSize!=="overlay" && (
           (rightOpen || rightSize!=="normal") ? (
             <div style={S.right}>
@@ -5144,6 +5158,60 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
         )}
 
       </div>
+
+      {/* MOBIL — web náhľad ako vysúvacia lišta (bottom sheet) nad formulárom */}
+      {isMobile && (
+        <>
+          {/* Úchytka — vždy viditeľná pri zavretom paneli, potiahni/klikni pre otvorenie */}
+          {!mobilePreviewOpen && (
+            <button
+              onClick={()=>setMobilePreviewOpen(true)}
+              style={{
+                position:"fixed", left:"50%", bottom:0, transform:"translateX(-50%)",
+                zIndex:160, background:c.pri, color:"#fff", border:"none",
+                borderRadius:"14px 14px 0 0", padding:"0.55rem 1.4rem 0.5rem",
+                fontSize:"0.72rem", fontWeight:700, cursor:"pointer",
+                boxShadow:"0 -4px 16px rgba(0,0,0,0.3)",
+                display:"flex", flexDirection:"column", alignItems:"center", gap:"0.25rem",
+              }}>
+              <div style={{width:32, height:3, borderRadius:2, background:"rgba(255,255,255,0.6)"}}/>
+              <span>▲ {T("webPreview")} náhľad</span>
+            </button>
+          )}
+
+          {/* Zatemnenie pozadia keď je lišta vysunutá */}
+          {mobilePreviewOpen && (
+            <div
+              onClick={()=>setMobilePreviewOpen(false)}
+              style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:150 }}
+            />
+          )}
+
+          {/* Samotná vysúvacia lišta — potiahni úchytku dole pre zatvorenie */}
+          <div style={{
+            position:"fixed", left:0, right:0, bottom:0, height:"85vh", maxHeight:"85vh",
+            background:c.panel, borderRadius:"18px 18px 0 0",
+            boxShadow:"0 -8px 32px rgba(0,0,0,0.4)",
+            zIndex:161, display:"flex", flexDirection:"column", overflow:"hidden",
+            transform: mobilePreviewOpen ? `translateY(${drawerDragY}px)` : "translateY(100%)",
+            transition: drawerDragging ? "none" : "transform .3s cubic-bezier(0.4,0,0.2,1)",
+            touchAction:"none",
+          }}>
+            <div onPointerDown={startDrawerDrag}
+              style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"0.5rem 0 0.3rem", cursor:"grab", flexShrink:0 }}>
+              <div style={{width:36, height:4, borderRadius:2, background:c.border}}/>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 0.875rem 0.5rem", flexShrink:0 }}>
+              <span style={{fontSize:"0.72rem", fontWeight:700, color:c.text}}>👁 {T("webPreview")} náhľad</span>
+              <button style={S.iconBtn} onClick={()=>setMobilePreviewOpen(false)}>✕</button>
+            </div>
+            {RightModeRow()}
+            <div style={{flex:1, overflowY:"auto"}}>
+              {RightBody()}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* OVERLAY — pravý panel prekrývajúci ľavý aj stredný stĺpec */}
       {!isMobile && rightSize==="overlay" && (
