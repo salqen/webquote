@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slider 7 — Circle reveal</title>
+<style>
+  :root{--ease:cubic-bezier(.7,0,.3,1)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:#0c0c0f;min-height:100vh;
+    display:flex;align-items:center;justify-content:center;padding:24px;
+  }
+  .slider{
+    position:relative;width:min(100%,1280px);aspect-ratio:16/9;
+    border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6);
+    cursor:pointer;
+  }
+  .slide{
+    position:absolute;inset:0;
+    clip-path:circle(0% at var(--x,50%) var(--y,50%));
+    transition:clip-path 1s var(--ease);
+    display:flex;flex-direction:column;justify-content:center;
+    padding:0 clamp(28px,7vw,90px);gap:14px;
+  }
+  .slide.active{clip-path:circle(150% at var(--x,50%) var(--y,50%));z-index:2}
+  .slide.was{z-index:1;clip-path:circle(150% at 50% 50%);transition:none}
+  .s1{background:radial-gradient(120% 120% at 20% 20%,#7b3fe4,#191038 70%)}
+  .s2{background:radial-gradient(120% 120% at 80% 30%,#e2593b,#3a0f06 70%)}
+  .s3{background:radial-gradient(120% 120% at 30% 80%,#14b8a6,#052e29 70%)}
+  .s4{background:radial-gradient(120% 120% at 70% 70%,#2b7ac4,#0a1c33 70%)}
+  .num{
+    font-size:clamp(50px,9vw,120px);font-weight:900;line-height:.9;color:rgba(255,255,255,.16);letter-spacing:-.04em;
+  }
+  .slide h2{
+    font-size:clamp(28px,4.6vw,64px);font-weight:900;color:#fff;letter-spacing:-.02em;line-height:1.02;
+    transform:translateY(24px);opacity:0;transition:.7s var(--ease) .35s;
+  }
+  .slide p{
+    font-size:clamp(14px,1.7vw,19px);color:rgba(255,255,255,.75);max-width:52ch;
+    transform:translateY(20px);opacity:0;transition:.7s var(--ease) .5s;
+  }
+  .hint{
+    font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.5);
+    margin-top:12px;transform:translateY(16px);opacity:0;transition:.7s var(--ease) .65s;
+  }
+  .slide.active h2,.slide.active p,.slide.active .hint{transform:translateY(0);opacity:1}
+  .dots{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:5}
+  .dots button{width:11px;height:11px;border-radius:50%;border:0;cursor:pointer;background:rgba(255,255,255,.35);transition:all .3s}
+  .dots button.active{background:#fff;width:30px;border-radius:6px}
+  .label{position:absolute;top:18px;left:22px;z-index:5;color:rgba(255,255,255,.7);font-size:13px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;pointer-events:none}
+</style>
+</head>
+<body>
+  <div class="slider" id="slider">
+    <div class="slide s1 active">
+      <div class="num">01</div>
+      <h2>Kruhové odhalenie</h2>
+      <p>Nový slide sa rozlieva ako kvapka atramentu — kruh rastie presne z miesta, kam klikneš.</p>
+      <div class="hint">Klikni kamkoľvek</div>
+    </div>
+    <div class="slide s2">
+      <div class="num">02</div>
+      <h2>Interakcia rozhoduje</h2>
+      <p>Stred kruhu je pozícia kurzora, takže každý prechod vyzerá inak.</p>
+      <div class="hint">Klikni kamkoľvek</div>
+    </div>
+    <div class="slide s3">
+      <div class="num">03</div>
+      <h2>Clip-path mágia</h2>
+      <p>Celý efekt je jediná CSS vlastnosť — clip-path: circle() s plynulou animáciou.</p>
+      <div class="hint">Klikni kamkoľvek</div>
+    </div>
+    <div class="slide s4">
+      <div class="num">04</div>
+      <h2>Bez obrázkov</h2>
+      <p>Radiálne gradienty stačia — pri reálnom použití ich nahradíš fotkami.</p>
+      <div class="hint">Klikni kamkoľvek</div>
+    </div>
+    <div class="dots" id="dots"></div>
+    <span class="label">Circle Reveal</span>
+  </div>
+<script>
+  const slider=document.getElementById('slider');
+  const slides=[...document.querySelectorAll('.slide')];
+  const dotsWrap=document.getElementById('dots');
+  let i=0,timer,busy=false;
+  slides.forEach((_,n)=>{
+    const b=document.createElement('button');
+    if(n===0)b.classList.add('active');
+    b.onclick=e=>{e.stopPropagation();go(n)};
+    dotsWrap.appendChild(b);
+  });
+  const dots=[...dotsWrap.children];
+  function go(n,x=50,y=50){
+    if(busy||n===i)return;busy=true;
+    const prev=slides[i],next=slides[(n+slides.length)%slides.length];
+    dots[i].classList.remove('active');
+    i=(n+slides.length)%slides.length;
+    dots[i].classList.add('active');
+    prev.classList.remove('active');prev.classList.add('was');
+    next.style.setProperty('--x',x+'%');
+    next.style.setProperty('--y',y+'%');
+    void next.offsetWidth;
+    next.classList.add('active');
+    setTimeout(()=>{prev.classList.remove('was');busy=false},1050);
+    restart();
+  }
+  slider.addEventListener('click',e=>{
+    const r=slider.getBoundingClientRect();
+    go(i+1,((e.clientX-r.left)/r.width*100).toFixed(1),((e.clientY-r.top)/r.height*100).toFixed(1));
+  });
+  function restart(){clearInterval(timer);timer=setInterval(()=>go(i+1,Math.random()*100|0,Math.random()*100|0),6000)}
+  restart();
+</script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slider 3 — Coverflow / 3D karty</title>
+<style>
+  :root{--ease:cubic-bezier(.4,0,.2,1)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(circle at 50% 30%,#1b1b22,#0a0a0d 70%);
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    padding:24px;overflow:hidden;
+  }
+  .stage{
+    position:relative;width:min(100%,1280px);aspect-ratio:16/9;
+    perspective:1600px;display:flex;align-items:center;justify-content:center;
+  }
+  .card{
+    position:absolute;width:46%;aspect-ratio:16/9;border-radius:18px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 30px 60px rgba(0,0,0,.55);
+    transition:transform .7s var(--ease),opacity .7s var(--ease),filter .7s var(--ease);
+    cursor:pointer;backface-visibility:hidden;
+  }
+  .card:nth-child(1){background:linear-gradient(135deg,#caa24a,#5e4410 45%,#0e0e0e)}
+  .card:nth-child(2){background:linear-gradient(135deg,#e23b3b,#5a0d0d 45%,#111)}
+  .card:nth-child(3){background:linear-gradient(135deg,#2b56c4,#1d2f6b 40%,#e08a1e)}
+  .card:nth-child(4){background:linear-gradient(135deg,#d11f2d,#3a3a3f 55%,#0d0d0d)}
+  .card:nth-child(5){background:linear-gradient(135deg,#7b3fe4,#2a2360 45%,#14b8a6)}
+  .num{font-size:clamp(50px,10vw,150px);font-weight:900;color:rgba(255,255,255,.92);text-shadow:0 8px 30px rgba(0,0,0,.45)}
+  .arrow{
+    position:absolute;top:50%;transform:translateY(-50%);z-index:20;
+    width:54px;height:54px;border-radius:50%;border:0;cursor:pointer;
+    background:rgba(255,255,255,.1);backdrop-filter:blur(6px);
+    color:#fff;font-size:24px;display:grid;place-items:center;transition:background .25s;
+  }
+  .arrow:hover{background:rgba(255,255,255,.25)}
+  .prev{left:8px}.next{right:8px}
+  .label{position:absolute;top:18px;left:50%;transform:translateX(-50%);z-index:20;color:rgba(255,255,255,.7);font-size:13px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="card"><span class="num">1</span></div>
+    <div class="card"><span class="num">2</span></div>
+    <div class="card"><span class="num">3</span></div>
+    <div class="card"><span class="num">4</span></div>
+    <div class="card"><span class="num">5</span></div>
+    <span class="label">Coverflow · 3D</span>
+    <button class="arrow prev" id="prev">‹</button>
+    <button class="arrow next" id="next">›</button>
+  </div>
+<script>
+  const cards=[...document.querySelectorAll('.card')];
+  const total=cards.length;
+  let active=0,timer;
+  function render(){
+    cards.forEach((c,n)=>{
+      let off=n-active;
+      if(off>total/2)off-=total;
+      if(off<-total/2)off+=total;
+      const abs=Math.abs(off);
+      const tx=off*42;                 // horizontal spread %
+      const rot=off*-38;               // rotateY
+      const scale=off===0?1:.78-abs*.04;
+      const z=100-abs;
+      const op=abs>2?0:1-abs*.18;
+      c.style.transform=`translateX(${tx}%) rotateY(${rot}deg) scale(${scale})`;
+      c.style.zIndex=z;c.style.opacity=op;
+      c.style.filter=off===0?'none':`brightness(.6)`;
+    });
+  }
+  function go(n,manual){active=(n+total)%total;render();if(manual)restart();}
+  cards.forEach((c,n)=>c.onclick=()=>go(n,true));
+  document.getElementById('next').onclick=()=>go(active+1,true);
+  document.getElementById('prev').onclick=()=>go(active-1,true);
+  function start(){timer=setInterval(()=>go(active+1),3500)}
+  function restart(){clearInterval(timer);start()}
+  render();start();
+</script>
+</body>
+</html>

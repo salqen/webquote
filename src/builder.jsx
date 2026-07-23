@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { getIndustryExtras, INDUSTRY_SECTION_PRESETS } from "./industryData.js";
+import { getIndustryExtras, INDUSTRY_SECTION_PRESETS, getRecommendedSections } from "./industryData.js";
 import { LANGS, tr, localizeSections, localizeAccordion, localizeWebTypes, localizeIndustries, extraLabel } from "./i18n.js";
 import { generateProPrompt } from "./promptGen.js";
+import { generatePrivacyPolicy, generateCookiesPolicy } from "./legalGen.js";
 import MiniWebPreview from "./WebPreview.jsx";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────
@@ -125,37 +126,14 @@ export async function dbRenameSession(oldId, newId) {
 
 
 // ─── THEME ────────────────────────────────────────────────
-const THEMES = {
-  dark: {
-    bg:"#05060d", panel:"#0c0d1a", card:"#12142a",
-    border:"#1a1c35", text:"#e8eef5", muted:"#5a6080", subtle:"#1a1c35",
-    inpBg:"#0c0d1a", cardActive:"#12142a", codeBg:"#05060d", codeText:"#ff6a00", checkbox:"#ff6a00", desc:"#5a6080",
-  },
-  light: {
-    bg:"#f8f6f2", panel:"#f0ede8", card:"#e8e4df",
-    border:"#d5d0ca", text:"#1a1a1a", muted:"#888", subtle:"#ccc",
-    inpBg:"#f4f1ec", cardActive:"#ebe7e1", codeBg:"#eeeae4", codeText:"#2d6e3e", checkbox:"#888", desc:"#6a6a6a",
-  },
+// Fixná MediaVolt paleta — teplá tmavá (volt orange #ff6a00).
+// UI appky sa už NEprefarbuje podľa vybratej farebnej témy briefu.
+const MV_THEME = {
+  bg:"#0a0604", panel:"#120b07", card:"#1a1009",
+  border:"#2a1d12", text:"#f4ece6", muted:"#8f8378", subtle:"#2a1d12",
+  inpBg:"#120b07", cardActive:"#22150c", codeBg:"#0a0604", codeText:"#ff9540", checkbox:"#ff6a00", desc:"#6f6459",
 };
-
-function ThemeToggle({ theme, setTheme }) {
-  const isDark = theme === "dark";
-  return (
-    <button
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      title={isDark ? "Svetlá téma" : "Tmavá téma"}
-      style={{
-        background:"transparent",
-        border:`1px solid ${isDark?"#2a2a2a":"#d5d0ca"}`,
-        borderRadius:8, padding:"0.3rem 0.625rem", cursor:"pointer",
-        fontSize:"0.85rem", display:"flex", alignItems:"center", gap:"0.375rem",
-        color:isDark?"#888":"#666", transition:"all .15s", minHeight:"unset",
-      }}>
-      {isDark ? "☀️" : "🌙"}
-      <span style={{fontSize:"0.68rem",fontWeight:500}}>{isDark?"Svetlá":"Tmavá"}</span>
-    </button>
-  );
-}
+const THEMES = { dark: MV_THEME, light: MV_THEME };
 
 // ─── DATA ─────────────────────────────────────────────────
 
@@ -169,6 +147,16 @@ const WEB_TYPES_BASE = [
 // ── INDUSTRIES ─────────────────────────────────────────────
 const INDUSTRIES_BASE = [
   {
+    id:"agro", label:"Agro & Potravinárstvo", icon:"🌾",
+    subs:[
+      { id:"farm",       label:"Farma / Gazdovstvo",    icon:"🚜", desc:"Rodinná farma, chov, pestovanie, produkty z farmy" },
+      { id:"winery",     label:"Vinárstvo",             icon:"🍷", desc:"Vinárstvo, degustácie, predaj vína, ročníky" },
+      { id:"brewery",    label:"Pivovar / Páleníca",    icon:"🍺", desc:"Remeselný pivovar alebo páleníca, exkurzie, e-shop" },
+      { id:"beekeeping", label:"Včelárstvo",            icon:"🐝", desc:"Med a včelie produkty, predaj z dvora" },
+      { id:"farmshop",   label:"Predaj z dvora / Debničky", icon:"🥕", desc:"Lokálne potraviny, debničkový systém, odberné miesta" },
+    ],
+  },
+  {
     id:"automotive", label:"Automotive", icon:"🚗",
     subs:[
       { id:"cardealer",  label:"Autobazár / Predajca",  icon:"🚙", desc:"Predaj vozidiel, ponuka skladom, financovanie" },
@@ -176,6 +164,8 @@ const INDUSTRIES_BASE = [
       { id:"carwash",    label:"Autoumyváreň",          icon:"🚿", desc:"Umývanie a detailing vozidiel, balíky služieb" },
       { id:"carrental",  label:"Autopožičovňa",         icon:"🔑", desc:"Prenájom vozidiel, rezervačný systém, flotila" },
       { id:"tires",      label:"Pneuservis",            icon:"🛞", desc:"Predaj a výmena pneumatík, skladovanie" },
+      { id:"moto",       label:"Moto predaj / servis",  icon:"🏍", desc:"Motocykle, štvorkolky, servis a príslušenstvo" },
+      { id:"towing",     label:"Odťahová služba",       icon:"🚨", desc:"Odťah vozidiel, NONSTOP linka, cenník podľa km" },
     ],
   },
   {
@@ -188,13 +178,25 @@ const INDUSTRIES_BASE = [
       { id:"designer",    label:"Grafický dizajnér", icon:"✏️", desc:"Dizajnérske portfólio, Behance štýl" },
       { id:"writer",      label:"Spisovateľ / Blog", icon:"✍️", desc:"Autorský blog, knihy, newsletter" },
       { id:"influencer",  label:"Influencer / Creator",icon:"⭐",desc:"Personal brand, spolupráce, kontakt" },
-      { id:"event",       label:"Event / Festoval",  icon:"🎪", desc:"Eventová agentúra, kalendár, tickety" },
+      { id:"event",       label:"Event / Festival",  icon:"🎪", desc:"Eventová agentúra, kalendár, tickety" },
+      { id:"fashiondesign",label:"Módny návrhár / Ateliér", icon:"🧵", desc:"Autorská móda, kolekcie, zákazkové šitie" },
+    ],
+  },
+  {
+    id:"family", label:"Deti & Rodina", icon:"🧸",
+    subs:[
+      { id:"kindergarten", label:"Súkromná škôlka / Jasle", icon:"🏫", desc:"Predškolské zariadenie, program, zápis, cenník" },
+      { id:"playcenter",   label:"Detské centrum / Herňa",  icon:"🎠", desc:"Vnútorná herňa, oslavy, animátori, vstupné" },
+      { id:"nanny",        label:"Opatrovanie detí",        icon:"🍼", desc:"Agentúra opatrovateliek, profily, dostupnosť" },
+      { id:"camps",        label:"Tábory / Pobyty pre deti",icon:"⛺", desc:"Letné a zimné tábory, turnusy, prihlášky" },
     ],
   },
   {
     id:"ecommerce", label:"E-commerce", icon:"🛒",
     subs:[
       { id:"eshop",      label:"E-shop",            icon:"🏪", desc:"Klasický e-shop s produktovými kategóriami" },
+      { id:"jewelry",    label:"Šperky / Hodinky",  icon:"💎", desc:"Šperky, hodinky, doplnky — prémiový vizuál" },
+      { id:"books",      label:"Knihy / Papiernictvo", icon:"📚", desc:"Kníhkupectvo, papiernictvo, kreatívne potreby" },
       { id:"fashion",    label:"Móda / Oblečenie",  icon:"👗", desc:"Clothing brand, lookbook, veľkostná tabuľka" },
       { id:"electronics",label:"Elektronika",       icon:"💻", desc:"Technika, porovnanie parametrov, servis" },
       { id:"food-shop",  label:"Potraviny online",  icon:"🥦", desc:"Online potraviny, farmárske produkty, predplatné" },
@@ -213,6 +215,9 @@ const INDUSTRIES_BASE = [
       { id:"kids",       label:"Deti / Krúžky",     icon:"🧒", desc:"Detské krúžky, deti aktivity, prihláška" },
       { id:"workshop",   label:"Workshopy / Eventy", icon:"🎪", desc:"Jednorazové workshopy, ticket predaj" },
       { id:"driving",    label:"Autoškola",          icon:"🚗", desc:"Autoškola, kurzy, termíny, ceny" },
+      { id:"university", label:"Univerzita / VŠ",    icon:"🏛", desc:"Vysoká škola, fakulty, štúdium, prijímačky" },
+      { id:"tutoring",   label:"Doučovanie",         icon:"📖", desc:"Individuálne doučovanie, predmety, online hodiny" },
+      { id:"artschool",  label:"Hudobná / Umelecká škola", icon:"🎼", desc:"ZUŠ, hudobné kurzy, výtvarné odbory, koncerty" },
     ],
   },
   {
@@ -236,6 +241,7 @@ const INDUSTRIES_BASE = [
       { id:"bakery",     label:"Pekáreň / Cukráreň", icon:"🥐", desc:"Pekárenské produkty, objednávky, torty" },
       { id:"fastfood",   label:"Fast food",     icon:"🍔", desc:"Rýchle občerstvenie, online objednávky, donáška" },
       { id:"catering",   label:"Catering",      icon:"🥗", desc:"Cateringové služby pre eventy a firmy" },
+      { id:"winebar",    label:"Vináreň / Vinotéka", icon:"🍇", desc:"Degustácie, predaj vína, posedenie" },
     ],
   },
   {
@@ -247,6 +253,18 @@ const INDUSTRIES_BASE = [
       { id:"physio",     label:"Fyzioterapia",        icon:"🦴", desc:"Fyzioterapeutická prax, rezervácia, ceny" },
       { id:"optician",   label:"Optika",             icon:"👓", desc:"Okuliare, vyšetrenie, online objednávka" },
       { id:"nutrition",  label:"Výživa / Dietológ",  icon:"🥑", desc:"Výživový poradca, jedálny lístok, online konzultácia" },
+      { id:"aesthetics", label:"Estetická medicína", icon:"💉", desc:"Estetické zákroky, dermatológia, konzultácie" },
+      { id:"lab",        label:"Laboratórium / Diagnostika", icon:"🧪", desc:"Odbery, vyšetrenia, výsledky online" },
+      { id:"careservice",label:"Opatrovateľská služba / DSS", icon:"🤲", desc:"Starostlivosť o seniorov, domov sociálnych služieb" },
+    ],
+  },
+  {
+    id:"hr", label:"HR & Kariéra", icon:"🧑‍💼",
+    subs:[
+      { id:"recruitment", label:"Personálna agentúra", icon:"🤝", desc:"Nábor zamestnancov, ponuky práce, pre firmy aj kandidátov" },
+      { id:"jobportal",   label:"Pracovný portál",     icon:"📋", desc:"Inzercia práce, filtrovanie ponúk, životopisy" },
+      { id:"coworking",   label:"Coworking / Kancelárie", icon:"🏢", desc:"Zdieľané pracovné priestory, členstvá, rezervácie" },
+      { id:"careercoach", label:"Kariérne poradenstvo", icon:"🎯", desc:"CV, pohovory, kariérny rast, konzultácie" },
     ],
   },
   {
@@ -256,6 +274,18 @@ const INDUSTRIES_BASE = [
       { id:"wholesale",  label:"Veľkoobchod",       icon:"📦", desc:"Distribúcia, cenníky pre partnerov, objednávky" },
       { id:"engineering",label:"Strojárstvo / Engineering", icon:"⚙️", desc:"Technické riešenia, referencie, dopytový formulár" },
       { id:"packaging",  label:"Obaly / Tlač",      icon:"📐", desc:"Výroba obalov, tlačové služby, kalkulácia" },
+      { id:"metal",      label:"Kovovýroba / Zváranie", icon:"🔩", desc:"Zákazková kovovýroba, konštrukcie, zváračské práce" },
+      { id:"printing3d", label:"3D tlač / Prototypy", icon:"🖨", desc:"3D tlač na zákazku, prototypovanie, malosériová výroba" },
+    ],
+  },
+  {
+    id:"media", label:"Médiá & Zábava", icon:"🎬",
+    subs:[
+      { id:"magazine",   label:"Online magazín / Spravodajstvo", icon:"📰", desc:"Publikovanie článkov, kategórie, autori, reklama" },
+      { id:"podcast",    label:"Podcast",             icon:"🎙", desc:"Epizódy, platformy na počúvanie, hostia, sponzori" },
+      { id:"radiotv",    label:"Rádio / TV",          icon:"📺", desc:"Vysielanie, program, relácie, archív" },
+      { id:"gaming",     label:"Gaming / E-sport",    icon:"🎮", desc:"Herný tím, turnaje, streamovanie, komunita" },
+      { id:"cinema",     label:"Kino / Divadlo",      icon:"🎭", desc:"Program, predstavenia, vstupenky online" },
     ],
   },
   {
@@ -277,6 +307,7 @@ const INDUSTRIES_BASE = [
       { id:"grooming",   label:"Grooming salón",      icon:"✂️", desc:"Kozmetické úpravy zvierat, rezervácia termínu" },
       { id:"breeder",    label:"Chovná stanica",      icon:"🐕", desc:"Chov, šteniatka/mačiatka na predaj, rodokmene" },
       { id:"petboarding",label:"Penzión pre zvieratá", icon:"🏡", desc:"Hotel/útulok pre domáce zvieratá, ceny pobytu" },
+      { id:"dogtraining",label:"Výcvik psov / Kynológia", icon:"🐕‍🦺", desc:"Výcvik poslušnosti, kurzy, individuálne lekcie" },
     ],
   },
   {
@@ -289,6 +320,19 @@ const INDUSTRIES_BASE = [
     ],
   },
   {
+    id:"crafts", label:"Remeslá & Domáce služby", icon:"🔨",
+    subs:[
+      { id:"electrician", label:"Elektrikár",           icon:"⚡", desc:"Elektroinštalácie, revízie, opravy, pohotovosť" },
+      { id:"plumber",     label:"Vodár / Kúrenár",      icon:"🚰", desc:"Voda, kúrenie, plyn — montáž, servis, havárie" },
+      { id:"carpenter",   label:"Stolár / Nábytok na mieru", icon:"🪚", desc:"Zákazková výroba nábytku, kuchyne, vstavané skrine" },
+      { id:"painter",     label:"Maliar / Sadrokartón", icon:"🖌", desc:"Maľovanie, stierky, sadrokartónové konštrukcie" },
+      { id:"gardener",    label:"Záhradník / Záhradné služby", icon:"🌿", desc:"Údržba záhrad, kosenie, závlahy, realizácie" },
+      { id:"hvac",        label:"Klimatizácie / Tepelné čerpadlá", icon:"❄️", desc:"Montáž a servis klimatizácií a tepelných čerpadiel" },
+      { id:"locksmith",   label:"Zámočník",             icon:"🗝", desc:"Otváranie dverí, výmena zámkov, pohotovosť" },
+      { id:"chimney",     label:"Kominár",              icon:"🧱", desc:"Čistenie a revízie komínov, frézovanie, vložkovanie" },
+    ],
+  },
+  {
     id:"realty", label:"Realitky & Stavebníctvo", icon:"🏠",
     subs:[
       { id:"realtor",    label:"Realitná kancelária",icon:"🏡", desc:"Predaj a prenájom, mapa nehnuteľností, kontakt" },
@@ -297,6 +341,8 @@ const INDUSTRIES_BASE = [
       { id:"construction",label:"Stavebná firma",    icon:"🔨", desc:"Rekonštrukcie, novostavby, referencie" },
       { id:"interior",   label:"Interiér",           icon:"🛋", desc:"Interiérový dizajn, štúdio, portfolio" },
       { id:"rental",     label:"Prenájom",           icon:"🔑", desc:"Short/long term prenájom, apartmány, rezervácia" },
+      { id:"facility",   label:"Správa budov / Facility", icon:"🏬", desc:"Facility management, správa bytových domov" },
+      { id:"surveyor",   label:"Geodet",             icon:"📏", desc:"Geodetické práce, zameranie, geometrické plány" },
     ],
   },
   {
@@ -310,6 +356,8 @@ const INDUSTRIES_BASE = [
       { id:"transport",  label:"Doprava / Logistika",icon:"🚛", desc:"Prepravná spoločnosť, kuriér, sťahovanie" },
       { id:"security",   label:"Bezpečnostné služby",icon:"🔒", desc:"Ochrana osôb a majetku, kamerové systémy" },
       { id:"insurance",  label:"Poisťovníctvo",     icon:"🛡", desc:"Poisťovací agent, produkty, kalkulačka" },
+      { id:"energy",     label:"Energetika / Fotovoltika", icon:"☀️", desc:"Solárne panely, fotovoltické riešenia, úspory energií" },
+      { id:"funeral",    label:"Pohrebné služby",   icon:"🕯", desc:"Pohrebníctvo, NONSTOP linka, kompletné zabezpečenie" },
     ],
   },
   {
@@ -319,6 +367,18 @@ const INDUSTRIES_BASE = [
       { id:"outdoor",     label:"Outdoor / Adrenalín", icon:"🧗", desc:"Lezenie, turistika, adrenalínové aktivity, rezervácia" },
       { id:"sportshop",   label:"Športové potreby",   icon:"⚽", desc:"Predaj výstroje, e-shop alebo kamenná predajňa" },
       { id:"golfski",      label:"Golf / Lyžiarske stredisko", icon:"⛷", desc:"Rezervácie, ceny skipasov/green fee, mapy" },
+      { id:"trainer",      label:"Osobný tréner",     icon:"🏋", desc:"Individuálne tréningy, plány, transformácie klientov" },
+      { id:"dance",        label:"Tanečná škola",     icon:"💃", desc:"Tanečné kurzy, rozvrh, vystúpenia, plesová sezóna" },
+      { id:"martialarts",  label:"Bojové umenia",     icon:"🥋", desc:"Bojové športy, tréningy pre deti aj dospelých" },
+    ],
+  },
+  {
+    id:"events", label:"Svadby & Eventy", icon:"💍",
+    subs:[
+      { id:"weddingagency", label:"Svadobná agentúra", icon:"👰", desc:"Organizácia svadieb na kľúč, balíky, referencie" },
+      { id:"eventservices", label:"Event služby / Technika", icon:"🎤", desc:"Ozvučenie, osvetlenie, pódiá, technika na akcie" },
+      { id:"florist",       label:"Kvetinárstvo",      icon:"💐", desc:"Kytice, svadobná výzdoba, donáška kvetov" },
+      { id:"partyrental",   label:"Požičovňa (dekor, mobiliár)", icon:"🪑", desc:"Prenájom dekorácií, stanov, nábytku na akcie" },
     ],
   },
   {
@@ -330,6 +390,9 @@ const INDUSTRIES_BASE = [
       { id:"startup",    label:"Startup",             icon:"🚀", desc:"Startup landing, investor deck vibe, waitlist" },
       { id:"ai",         label:"AI / Automatizácia", icon:"🤖", desc:"AI produkt, demo, use cases, integrácie" },
       { id:"hosting",    label:"Hosting / Cloud",    icon:"☁️", desc:"Hosting služby, plány, uptime, podpora" },
+      { id:"itservice",  label:"IT servis / Podpora", icon:"🖥", desc:"Správa IT, opravy počítačov, outsourcing, helpdesk" },
+      { id:"cybersec",   label:"Kyberbezpečnosť",    icon:"🛡", desc:"Bezpečnostné audity, penetračné testy, compliance" },
+      { id:"isp",        label:"Telekom / Internet provider", icon:"📡", desc:"Internetové pripojenie, pokrytie, balíky, TV" },
     ],
   },
   {
@@ -340,6 +403,7 @@ const INDUSTRIES_BASE = [
       { id:"tourguide",   label:"Sprievodca / Tour", icon:"🗺", desc:"Prehliadky, výlety, rezervácia termínov" },
       { id:"airbnb",      label:"Apartmány / Airbnb", icon:"🏠", desc:"Krátkodobý prenájom, kalendár dostupnosti" },
       { id:"camping",      label:"Kemping / Glamping", icon:"⛺", desc:"Stanovanie, chatky, rezervácia miest" },
+      { id:"infocenter",   label:"Infocentrum / Atrakcia", icon:"🗽", desc:"Turistická atrakcia, vstupné, otváracie hodiny, trasy" },
     ],
   },
   {
@@ -357,12 +421,135 @@ const INDUSTRIES_BASE = [
   },
 ];
 
+// ── EN ALIASY pre inteligentné vyhľadávanie odvetví ─────────
+// Vyhľadávanie funguje v slovenčine (labely/popisy) aj v angličtine (tieto aliasy).
+const EN_ALIAS_CAT = {
+  agro:"agriculture farming food production", automotive:"automotive cars vehicles",
+  creative:"creative arts artists", ecommerce:"ecommerce online store shop",
+  family:"kids children family childcare", hr:"hr human resources career jobs recruiting",
+  events:"weddings events party planning",
+  education:"education learning school", finance:"finance investment banking money",
+  gastro:"food dining restaurant gastronomy horeca", health:"health medical healthcare",
+  manufacturing:"manufacturing industry production", media:"media entertainment publishing",
+  nonprofit:"nonprofit ngo charity community", pets:"pets animals veterinary",
+  public:"public sector government municipality", crafts:"crafts trades handyman home services",
+  realty:"real estate property construction", services:"services b2b b2c professional",
+  sportoutdoor:"sport outdoor fitness recreation", tech:"technology software saas it",
+  travel:"travel hospitality tourism accommodation", wellness:"wellness beauty selfcare",
+};
+const EN_ALIAS_SUB = {
+  // agro
+  farm:"farm farming livestock homestead", winery:"winery wine vineyard tasting",
+  brewery:"brewery craft beer distillery spirits", beekeeping:"beekeeping honey bees apiary",
+  farmshop:"farm shop local food veggie box csa",
+  // automotive
+  cardealer:"car dealer used cars dealership", carservice:"car repair garage auto service mechanic",
+  carwash:"car wash detailing", carrental:"car rental hire fleet", tires:"tire tyre service wheels",
+  moto:"motorcycle motorbike atv quad", towing:"towing tow truck roadside assistance",
+  // creative
+  photographer:"photographer photography studio", dj:"dj music producer booking",
+  band:"band musician artist discography tour", videographer:"videographer video production showreel",
+  designer:"graphic designer branding", writer:"writer author blog books copywriter",
+  influencer:"influencer creator personal brand", event:"event agency festival tickets",
+  // ecommerce
+  eshop:"eshop online store webshop", fashion:"fashion clothing apparel brand lookbook",
+  electronics:"electronics gadgets tech store", "food-shop":"groceries online food delivery",
+  handmade:"handmade crafts etsy products", "b2b-shop":"b2b wholesale ordering portal",
+  dropshipping:"dropshipping store winning products", subscription:"subscription box membership",
+  // education
+  school:"school language courses classes", coaching:"coaching mentoring business coach",
+  "online-edu":"online courses elearning lms", kids:"kids children activities clubs",
+  workshop:"workshop training events tickets", driving:"driving school lessons license",
+  // finance
+  bank:"bank fintech banking app", investing:"investing investment platform portfolio",
+  broker:"mortgage broker loans financial advisor", crypto:"crypto web3 blockchain wallet exchange",
+  accounting2:"accounting firm bookkeeping payroll taxes",
+  // gastro
+  restaurant:"restaurant fine dining reservations", cafe:"cafe coffee specialty brunch",
+  bar:"bar pub craft beer cocktails", club:"nightclub music club dj lineup",
+  foodtruck:"food truck street food", bakery:"bakery pastry cakes confectionery",
+  fastfood:"fast food burger delivery takeaway", catering:"catering events corporate food",
+  winebar:"wine bar wine shop tasting",
+  // health
+  clinic:"clinic doctor medical practice", dental:"dentist dental clinic teeth",
+  pharmacy:"pharmacy drugstore medicine", physio:"physiotherapy rehab physical therapy",
+  optician:"optician glasses eye exam optometrist", nutrition:"nutritionist dietician meal plan",
+  // manufacturing
+  factory:"factory manufacturer production b2b", wholesale:"wholesale distribution partners",
+  engineering:"engineering machinery technical solutions", packaging:"packaging printing production",
+  // media
+  magazine:"online magazine news portal articles", podcast:"podcast episodes spotify apple",
+  radiotv:"radio television broadcast program", gaming:"gaming esports team streaming twitch",
+  cinema:"cinema theatre theater shows tickets",
+  // nonprofit
+  ngo:"ngo nonprofit association mission donations", church:"church community worship parish",
+  sport:"sports club team membership", politics:"political party candidates program",
+  charity:"charity fundraising donations", personal:"personal website cv resume portfolio",
+  // pets
+  vet:"veterinarian vet clinic animal hospital", petshop:"pet shop food supplies",
+  grooming:"pet grooming salon dog", breeder:"breeder puppies kittens pedigree kennel",
+  petboarding:"pet hotel boarding daycare",
+  // public
+  municipality:"municipality town city hall village", government:"government institution public office",
+  library:"library culture events catalog", museum:"museum gallery exhibitions",
+  // crafts
+  electrician:"electrician electrical installations emergency", plumber:"plumber heating gas hvac water",
+  carpenter:"carpenter joiner custom furniture kitchens", painter:"painter decorating drywall plaster",
+  gardener:"gardener landscaping lawn garden design", hvac:"air conditioning heat pump installation",
+  locksmith:"locksmith lockout keys emergency", chimney:"chimney sweep inspection flue",
+  // realty
+  realtor:"real estate agency property listings", developer:"property developer projects apartments",
+  architect:"architect architecture studio design", construction:"construction company renovation building",
+  interior:"interior design studio home staging", rental:"rental apartments short long term lease",
+  // services
+  law:"lawyer attorney legal law firm", accounting:"accountant bookkeeping tax payroll",
+  agency:"marketing agency digital ads social media", consulting:"consultant business strategy advisory",
+  cleaning:"cleaning services commercial residential", transport:"transport logistics courier moving",
+  security:"security services cctv guarding", insurance:"insurance agent policies calculator",
+  energy:"solar panels photovoltaics renewable energy savings",
+  // sport & outdoor
+  sportsclub:"sports club team matches fans", outdoor:"outdoor climbing hiking adventure adrenaline",
+  sportshop:"sports equipment gear store", golfski:"golf course ski resort passes",
+  // tech
+  saas:"saas software product pricing signup", app:"mobile app landing appstore",
+  "agency-dev":"web development agency portfolio", startup:"startup landing waitlist investors",
+  ai:"artificial intelligence automation ai product", hosting:"hosting cloud servers vps uptime",
+  itservice:"it support services helpdesk managed msp computer repair",
+  // travel
+  hotel:"hotel guesthouse booking rooms", travelagency:"travel agency tours packages destinations",
+  tourguide:"tour guide trips excursions", airbnb:"apartments short term rental airbnb",
+  camping:"camping glamping campsite cabins",
+  // nové podkategórie (rozšírenie)
+  fashiondesign:"fashion designer atelier custom clothing couture",
+  kindergarten:"kindergarten nursery preschool daycare", playcenter:"play center kids playground parties",
+  nanny:"nanny babysitting childcare agency", camps:"summer camp kids camps",
+  jewelry:"jewelry watches accessories rings", books:"bookstore books stationery",
+  university:"university college faculty studies", tutoring:"tutoring lessons private teacher",
+  artschool:"music school art school lessons", aesthetics:"aesthetic medicine botox dermatology clinic",
+  lab:"laboratory diagnostics blood tests", careservice:"elderly care nursing home caregiving",
+  recruitment:"recruitment agency headhunting staffing", jobportal:"job board portal vacancies careers",
+  coworking:"coworking shared office space desks", careercoach:"career coaching cv resume interview",
+  metal:"metalworking welding steel fabrication", printing3d:"3d printing prototyping additive manufacturing",
+  dogtraining:"dog training obedience k9", facility:"facility management property maintenance",
+  surveyor:"land surveyor geodesy mapping", funeral:"funeral services undertaker burial",
+  trainer:"personal trainer fitness coaching", dance:"dance school classes studio",
+  martialarts:"martial arts karate mma boxing gym",
+  weddingagency:"wedding planner agency organization", eventservices:"event production sound lighting stage",
+  florist:"florist flower shop bouquets delivery", partyrental:"party rental decorations furniture tents",
+  cybersec:"cybersecurity penetration testing security audit", isp:"internet provider telecom broadband wifi",
+  infocenter:"tourist information center attraction landmark",
+  // wellness
+  spa:"spa wellness center hydrotherapy", massage:"massage studio therapy booking",
+  salon:"hair salon hairdresser styling", beauty:"beauty salon nails makeup cosmetics",
+  fitness:"fitness gym membership training", yoga:"yoga pilates studio classes",
+  therapy:"psychotherapy counseling coaching mental health", tattoo:"tattoo piercing studio portfolio",
+};
+
 // ── SECTIONS ────────────────────────────────────────────────
 const SECTIONS_BASE = [
   // CORE
   { id:"nav",          label:"Navigácia",          icon:"☰",  cat:"core",    desc:"Hlavné menu s logom, hamburger pre mobil, sticky efekt pri scrolle. Základ každej stránky.", note:"" },
   { id:"hero",         label:"Hero",               icon:"🖼", cat:"core",    desc:"Prvá vec ktorú návštevník vidí — veľký nadpis, podnadpis, primárny CTA button a vizuál alebo video.", note:"" },
-  { id:"footer",       label:"Footer",             icon:"▬",  cat:"core",    desc:"Spodná časť stránky s linkami, kontaktnými údajmi, sociálnymi sieťami a copyrightom.", note:"" },
   // CONTENT
   { id:"about",        label:"O nás",              icon:"👤", cat:"content", desc:"Príbeh firmy, misia, hodnoty. Humanizuje brand — ľudia nakupujú od ľudí.", note:"" },
   { id:"services",     label:"Služby",             icon:"🔧", cat:"content", desc:"Prehľad ponúkaných služieb v kartách alebo liste s popisom, ikonou a linkou na detail.", note:"" },
@@ -400,39 +587,63 @@ const SECTIONS_BASE = [
   // EXTRA
   { id:"cookies",      label:"Cookie Banner",      icon:"🍪", cat:"extra",   desc:"GDPR-compliant cookie banner s možnosťou prijatia/odmietnutia kategórií.", note:"" },
   { id:"scrolltop",    label:"Scroll to Top",      icon:"↑",  cat:"extra",   desc:"Plávajúce tlačidlo návrat hore ktoré sa objaví po scrolle o 300px.", note:"" },
-  { id:"404",          label:"404 stránka",        icon:"✕",  cat:"extra",   desc:"Custom chybová stránka s odkazom domov — zachráni stratené návštevy.", note:"" },
+  { id:"404",          label:"404 stránka",        icon:"✕",  cat:"extra",   desc:"Custom chybová stránka s odkazom domov — zachráni stratené návštevy. Vždy súčasť webu.", note:"" },
   { id:"maintenance",  label:"Maintenance page",   icon:"🔧", cat:"extra",   desc:"Stránka údržby s odpočítavaním alebo kontaktom počas výpadku.", note:"" },
   { id:"darkmode",     label:"Dark / Light mode",  icon:"🌙", cat:"extra",   desc:"Toggle prepínanie svetlého a tmavého režimu s uložením do localStorage.", note:"" },
   { id:"loader",       label:"Page loader",        icon:"⟳",  cat:"extra",   desc:"Animovaný loading screen ktorý sa zobrazí pri načítaní — brand moment.", note:"" },
   { id:"search",       label:"Vyhľadávanie",       icon:"🔍", cat:"extra",   desc:"Vyhľadávací overlay alebo inline search s real-time výsledkami.", note:"" },
   { id:"language",     label:"Jazykový prepínač",  icon:"🌐", cat:"extra",   desc:"Prepínač jazykov (SK/EN/DE) v navegácii — potrebné pre medzinárodné weby.", note:"" },
   { id:"chatbot",      label:"Chat / Chatbot",     icon:"💬", cat:"extra",   desc:"Live chat widget (Intercom, Crisp) alebo AI chatbot pre zákaznícku podporu.", note:"" },
-  { id:"gdpr",         label:"GDPR / Ochrana",     icon:"🔐", cat:"extra",   desc:"Stránka ochrany osobných údajov a VOP — povinné pre EU weby.", note:"" },
-  { id:"sitemap",      label:"Sitemap stránka",    icon:"🗂", cat:"extra",   desc:"HTML sitemap pre navigáciu a SEO — prehľad všetkých stránok webu.", note:"" },
+  { id:"gdpr",         label:"GDPR / Ochrana",     icon:"🔐", cat:"extra",   desc:"Stránka ochrany osobných údajov a VOP — povinné pre EU weby. Vždy súčasť webu.", note:"" },
+  // Footer — na konci celého výberu (stránka ním končí)
+  { id:"footer",       label:"Footer",             icon:"▬",  cat:"extra",   desc:"Spodná časť stránky s linkami, kontaktnými údajmi, sociálnymi sieťami a copyrightom.", note:"" },
 ];
+
+// Sekcie, ktoré sú vždy súčasťou webu — nedajú sa odškrtnúť
+const LOCKED_SECTIONS = ["404","gdpr"];
+
+// ── BEŽNÉ ODPORÚČANÉ PORADIE SEKCIÍ na stránke (zhora nadol) ──
+const RECOMMENDED_SECTION_ORDER = [
+  "nav","hero",
+  "about","services","features","products","menu","work","gallery","team","process","pricing",
+  "stats","logos","awards","partners","testimonials","reviews","press","ugc",
+  "blog","events","map","openinghours","faq",
+  "booking","calculator","quiz","leadform","newsletter","cta","contact",
+  "language","search","darkmode","loader","popup","chatbot",
+  "cookies","scrolltop","404","gdpr","maintenance",
+  "footer",
+];
+const sortByRecommended = (ids) => {
+  const idx = (id) => {
+    const i = RECOMMENDED_SECTION_ORDER.indexOf(id);
+    return i < 0 ? 999 : i;
+  };
+  return [...ids].sort((a, b) => idx(a) - idx(b));
+};
 
 // Navigácia — nezávislé vlastnosti (single-select groups + toggles)
 const NAV_BEHAVIOR = {
   key:"navBehavior", label:"Správanie pri scrolle", type:"single", default:"sticky",
   options:[
-    { id:"sticky", label:"Sticky (ukotvené)", desc:"Nav zostáva vždy viditeľná hore pri scrolle" },
-    { id:"hidden", label:"Hidden (skrývajúce sa)", desc:"Menu sa skryje pri scrolle dole, zobrazí po nabehnutí myšou do hornej časti" },
-    { id:"static", label:"Statické", desc:"Nav je len na vrchu, pri scrolle zmizne s obsahom" },
+    { id:"sticky", label:"Ukotvené (sticky)", desc:"Nav zostáva vždy viditeľná hore pri scrolle" },
+    { id:"static", label:"Statické (static)", desc:"Nav je len na vrchu, pri scrolle zmizne s obsahom" },
+    { id:"hidden", label:"Skrývajúce sa (hidden)", desc:"Menu sa skryje pri scrolle dole, zobrazí sa pri scrolle nahor" },
   ],
 };
 const NAV_BACKGROUND = {
   key:"navBackground", label:"Pozadie navigácie", type:"single", default:"solid",
   options:[
-    { id:"solid", label:"Solid (nepriehľadné)", desc:"Plné farebné pozadie" },
-    { id:"transparent", label:"Transparent (priehľadné)", desc:"Priehľadná na vrchu, pri scrolle získa pozadie" },
+    { id:"solid", label:"Nepriehľadné (solid)", desc:"Plné farebné pozadie" },
+    { id:"transparent", label:"Priehľadné (transparent)", desc:"Priehľadná na vrchu, pri scrolle získa pozadie" },
   ],
 };
 const NAV_LAYOUT = {
   key:"navLayout", label:"Umiestnenie menu", type:"single", default:"top",
   options:[
-    { id:"top", label:"Up menu (horné)", desc:"Klasická horná lišta" },
-    { id:"left", label:"Left side menu", desc:"Bočný panel vľavo" },
-    { id:"right", label:"Right side menu", desc:"Bočný panel vpravo" },
+    { id:"top", label:"Horné menu (up menu)", desc:"Klasická horná lišta" },
+    { id:"floating", label:"Plávajúce menu (floating menu)", desc:"Menu je pod hero sekciou a po scrollovaní sa ukotví na vrchu stránky" },
+    { id:"left", label:"Ľavé bočné menu (left side menu)", desc:"Bočný panel vľavo" },
+    { id:"right", label:"Pravé bočné menu (right side menu)", desc:"Bočný panel vpravo" },
   ],
 };
 const NAV_LOGO = {
@@ -447,7 +658,8 @@ const NAV_TOGGLES = [
   { key:"navAlwaysHamburger", label:"Vždy hamburger", desc:"Hamburger menu aj na desktope, nie len na mobile" },
   { key:"navSocials",         label:"Sociálne siete v navigácii", desc:"Ikony sociálnych sietí priamo v navigačnej lište" },
 ];
-const NAV_GROUPS = [NAV_BEHAVIOR, NAV_BACKGROUND, NAV_LAYOUT, NAV_LOGO];
+// Poradie: umiestnenie menu → pozícia loga → správanie pri scrolle → pozadie
+const NAV_GROUPS = [NAV_LAYOUT, NAV_LOGO, NAV_BEHAVIOR, NAV_BACKGROUND];
 
 // ── HERO config ────────────────────────────────────────────
 const HERO_STYLES = [
@@ -457,6 +669,29 @@ const HERO_STYLES = [
   { id:"info",    label:"Informačný",      icon:"📄", desc:"Hutný hero s viacerými info blokmi, vhodný pre B2B/služby" },
   { id:"sales",   label:"Predajný",        icon:"🎯", desc:"Silný value proposition, social proof, urgentné CTA" },
 ];
+// ── SLIDERY pre hero carousel (src/sliders — z priečinka SLIDERS) ──
+// HTML sa importuje ako text a vkladá cez iframe srcDoc — žiadna HTTP požiadavka,
+// takže X-Frame-Options: DENY v hlavičkách hostingu náhľady neblokuje.
+import sliderFadeHtml      from "./sliders/slider-1-fade.html?raw";
+import sliderSlideHtml     from "./sliders/slider-2-slide.html?raw";
+import sliderCoverflowHtml from "./sliders/slider-3-coverflow.html?raw";
+import sliderKenburnsHtml  from "./sliders/slider-4-kenburns.html?raw";
+import sliderCubeHtml      from "./sliders/slider-5-cube.html?raw";
+import sliderSplitHtml     from "./sliders/slider-6-split.html?raw";
+import sliderCircleHtml    from "./sliders/slider-7-circle.html?raw";
+import sliderCardsHtml     from "./sliders/slider-8-cards.html?raw";
+
+const SLIDER_OPTIONS = [
+  { id:"fade",      label:"Fade / Cross-dissolve", html:sliderFadeHtml,      desc:"Jemné prelínanie slidov" },
+  { id:"slide",     label:"Slide",                 html:sliderSlideHtml,     desc:"Klasický horizontálny posun" },
+  { id:"coverflow", label:"Coverflow",             html:sliderCoverflowHtml, desc:"3D coverflow efekt (Apple štýl)" },
+  { id:"kenburns",  label:"Ken Burns",             html:sliderKenburnsHtml,  desc:"Pomalý zoom a posun obrazu" },
+  { id:"cube",      label:"Cube",                  html:sliderCubeHtml,      desc:"3D rotácia kocky" },
+  { id:"split",     label:"Split",                 html:sliderSplitHtml,     desc:"Rozdelený prechod na polovice" },
+  { id:"circle",    label:"Circle reveal",         html:sliderCircleHtml,    desc:"Kruhové odhalenie slidu" },
+  { id:"cards",     label:"Cards / Stack",         html:sliderCardsHtml,     desc:"Karty ukladané na seba" },
+];
+
 const HERO_MEDIA = [
   { id:"none",    label:"Bez média",     icon:"—",  desc:"Len text a pozadie / gradient" },
   { id:"image",   label:"Obrázok",       icon:"🖼", desc:"Statický vizuál / fotka na pozadí alebo vedľa textu" },
@@ -585,6 +820,234 @@ const THEME_PRESETS = [
     dark:  { bg:"#0C0A06", surface:"#16120A", border:"#272014", text:"#F5EFE0", muted:"#7a6e50", primary:"#D4AF37", accent:"#E8E8E8", fontDisplay:"Cormorant Garamond", fontBody:"Inter" },
     light: { bg:"#FBF8F0", surface:"#F4EDDB", border:"#E7DABA", text:"#262013", muted:"#9a8a60", primary:"#B8902F", accent:"#3A3A3A", fontDisplay:"Cormorant Garamond", fontBody:"Inter" },
   },
+  {
+    id:"volt", label:"Volt Orange",
+    dark:  { bg:"#0A0604", surface:"#140A06", border:"#2A1D12", text:"#F4ECE6", muted:"#8f8378", primary:"#FF6A00", accent:"#FFB020", fontDisplay:"Syne", fontBody:"Space Grotesk" },
+    light: { bg:"#FBF6F1", surface:"#F3EAE2", border:"#E2D5C8", text:"#1C1208", muted:"#9a8a78", primary:"#E85D00", accent:"#D89010", fontDisplay:"Syne", fontBody:"Space Grotesk" },
+  },
+  {
+    id:"copper", label:"Copper Glow",
+    dark:  { bg:"#0D0806", surface:"#180F0A", border:"#2C1D14", text:"#F2EBE5", muted:"#8a7a6e", primary:"#D2691E", accent:"#F4A460", fontDisplay:"Fraunces", fontBody:"Inter" },
+    light: { bg:"#FBF5F0", surface:"#F4E9DE", border:"#E6D2BE", text:"#2A1C10", muted:"#9a8570", primary:"#B4571A", accent:"#C87941", fontDisplay:"Fraunces", fontBody:"Inter" },
+  },
+  {
+    id:"ruby", label:"Ruby Wine",
+    dark:  { bg:"#0E0608", surface:"#1A0D10", border:"#2E181D", text:"#F2E8EA", muted:"#7a5c62", primary:"#B91C1C", accent:"#F59E0B", fontDisplay:"Playfair Display", fontBody:"Inter" },
+    light: { bg:"#FCF5F6", surface:"#F7E7E9", border:"#EBCFD3", text:"#2A1215", muted:"#a07a80", primary:"#9F1616", accent:"#D97706", fontDisplay:"Playfair Display", fontBody:"Inter" },
+  },
+  {
+    id:"navy", label:"Deep Navy",
+    dark:  { bg:"#05080F", surface:"#0B111D", border:"#16202F", text:"#E6ECF5", muted:"#54627a", primary:"#1D4ED8", accent:"#38BDF8", fontDisplay:"Archivo", fontBody:"Inter" },
+    light: { bg:"#F3F6FB", surface:"#E5EBF5", border:"#CFDAEB", text:"#0E1626", muted:"#60708a", primary:"#1E40AF", accent:"#0284C7", fontDisplay:"Archivo", fontBody:"Inter" },
+  },
+  {
+    id:"sakura", label:"Sakura Blossom",
+    dark:  { bg:"#0F0A0C", surface:"#1A1216", border:"#2C1F26", text:"#F5EBEF", muted:"#8a707a", primary:"#E75480", accent:"#FBCFE8", fontDisplay:"Quicksand", fontBody:"DM Sans" },
+    light: { bg:"#FDF7F9", surface:"#F9EBF0", border:"#F0D5DF", text:"#2A1820", muted:"#a5808e", primary:"#D6336C", accent:"#E8879F", fontDisplay:"Quicksand", fontBody:"DM Sans" },
+  },
+  {
+    id:"lagoon", label:"Lagoon",
+    dark:  { bg:"#050D0F", surface:"#0B171A", border:"#15272B", text:"#E4F0F2", muted:"#4f6b70", primary:"#0E7490", accent:"#34D399", fontDisplay:"Sora", fontBody:"Inter" },
+    light: { bg:"#F2F9FA", surface:"#E2F0F2", border:"#C8E0E4", text:"#0E2428", muted:"#5f858c", primary:"#0C647C", accent:"#10B981", fontDisplay:"Sora", fontBody:"Inter" },
+  },
+
+  // ═══ TRENDY 2026 — zemité tóny, elevated neutrals, calm palettes ═══
+  // ORANŽOVÁ
+  {
+    id:"terracotta", label:"Terracotta Clay",
+    dark:  { bg:"#120B07", surface:"#1D130C", border:"#2F2114", text:"#F3ECE4", muted:"#8d7d6e", primary:"#BF5B36", accent:"#E8A87C", fontDisplay:"Fraunces", fontBody:"DM Sans" },
+    light: { bg:"#FAF4EE", surface:"#F2E7DC", border:"#E2CFBC", text:"#2B1C12", muted:"#96826f", primary:"#A84B28", accent:"#C97F52", fontDisplay:"Fraunces", fontBody:"DM Sans" },
+  },
+  {
+    id:"apricot", label:"Apricot Cream",
+    dark:  { bg:"#140D08", surface:"#1F150D", border:"#332417", text:"#F5EDE4", muted:"#93816f", primary:"#ED9455", accent:"#FFC697", fontDisplay:"Poppins", fontBody:"Inter" },
+    light: { bg:"#FFF9F2", surface:"#FBEEDF", border:"#F0D9BE", text:"#2E1F10", muted:"#a08a70", primary:"#DE7C3A", accent:"#F0A868", fontDisplay:"Poppins", fontBody:"Inter" },
+  },
+  {
+    id:"sienna", label:"Burnt Sienna",
+    dark:  { bg:"#110905", surface:"#1C110A", border:"#2F1E12", text:"#F2EAE2", muted:"#8a7869", primary:"#B24A24", accent:"#E9C46A", fontDisplay:"Playfair Display", fontBody:"Inter" },
+    light: { bg:"#FBF5EF", surface:"#F3E7DA", border:"#E4CFB9", text:"#2A190E", muted:"#94806c", primary:"#9C3E1C", accent:"#C79A3C", fontDisplay:"Playfair Display", fontBody:"Inter" },
+  },
+  // ČERVENÁ
+  {
+    id:"cherry", label:"Cherry Glaze",
+    dark:  { bg:"#100608", surface:"#1B0D10", border:"#2E181C", text:"#F4E9EB", muted:"#8a6f74", primary:"#C1121F", accent:"#F4A5A5", fontDisplay:"Oswald", fontBody:"Inter" },
+    light: { bg:"#FDF5F5", surface:"#F8E8E8", border:"#EDD0D0", text:"#2A1214", muted:"#9c7a7e", primary:"#A50E1A", accent:"#D97878", fontDisplay:"Oswald", fontBody:"Inter" },
+  },
+  {
+    id:"merlot", label:"Deep Merlot",
+    dark:  { bg:"#0F080A", surface:"#1A1013", border:"#2C1C21", text:"#F1E8EA", muted:"#846d72", primary:"#722F37", accent:"#D4A24C", fontDisplay:"Cormorant Garamond", fontBody:"DM Sans" },
+    light: { bg:"#FAF4F4", surface:"#F2E6E7", border:"#E2CBCE", text:"#281317", muted:"#94767c", primary:"#5E262D", accent:"#B8873B", fontDisplay:"Cormorant Garamond", fontBody:"DM Sans" },
+  },
+  {
+    id:"rust", label:"Rust & Stone",
+    dark:  { bg:"#0F0A07", surface:"#1A130D", border:"#2C2117", text:"#F1EBE5", muted:"#8b7f74", primary:"#B7410E", accent:"#A8A29E", fontDisplay:"Archivo", fontBody:"Inter" },
+    light: { bg:"#F8F5F2", surface:"#EFE8E1", border:"#DDD1C5", text:"#291C12", muted:"#95897c", primary:"#9E3809", accent:"#78716C", fontDisplay:"Archivo", fontBody:"Inter" },
+  },
+  // RUŽOVÁ
+  {
+    id:"blush", label:"Blush Calm",
+    dark:  { bg:"#100B0C", surface:"#1B1315", border:"#2E2124", text:"#F3ECED", muted:"#8c7b7e", primary:"#C9748C", accent:"#F2D3C9", fontDisplay:"Quicksand", fontBody:"DM Sans" },
+    light: { bg:"#FBF6F6", surface:"#F5E9E9", border:"#E8D2D4", text:"#2A1A1D", muted:"#9d8286", primary:"#B25E77", accent:"#D9A08F", fontDisplay:"Quicksand", fontBody:"DM Sans" },
+  },
+  {
+    id:"peach", label:"Peach Fuzz",
+    dark:  { bg:"#130C09", surface:"#1F1410", border:"#33231B", text:"#F5EDE9", muted:"#93807a", primary:"#EF8767", accent:"#FFBE98", fontDisplay:"Poppins", fontBody:"Inter" },
+    light: { bg:"#FFF8F4", surface:"#FBEBE2", border:"#F1D5C5", text:"#2E1B12", muted:"#a2887c", primary:"#E06E4B", accent:"#E89B72", fontDisplay:"Poppins", fontBody:"Inter" },
+  },
+  {
+    id:"fuchsia", label:"Fuchsia Pop",
+    dark:  { bg:"#0F0810", surface:"#1A0F1C", border:"#2D1B2F", text:"#F4EAF4", muted:"#8b7290", primary:"#C2258F", accent:"#7DD3FC", fontDisplay:"Space Grotesk", fontBody:"Inter" },
+    light: { bg:"#FCF5FB", surface:"#F7E7F4", border:"#EBCEE6", text:"#29102A", muted:"#9d7a9d", primary:"#A61E7A", accent:"#0284C7", fontDisplay:"Space Grotesk", fontBody:"Inter" },
+  },
+  // FIALOVÁ
+  {
+    id:"lavender", label:"Digital Lavender",
+    dark:  { bg:"#0C0A12", surface:"#15121F", border:"#252034", text:"#EFEBF7", muted:"#7f7794", primary:"#9F8FEF", accent:"#CDB4FE", fontDisplay:"Sora", fontBody:"Inter" },
+    light: { bg:"#F8F6FD", surface:"#EFEAF9", border:"#DCD3F0", text:"#1F1930", muted:"#8a80a5", primary:"#7C68D8", accent:"#A98BE8", fontDisplay:"Sora", fontBody:"Inter" },
+  },
+  {
+    id:"dusk", label:"Future Dusk",
+    dark:  { bg:"#0A0A14", surface:"#131324", border:"#22223C", text:"#ECECF5", muted:"#767692", primary:"#8E8FFA", accent:"#FFB4C2", fontDisplay:"Archivo", fontBody:"Space Grotesk" },
+    light: { bg:"#F4F4FA", surface:"#E9E9F4", border:"#D3D3E8", text:"#1B1B30", muted:"#7e7e9a", primary:"#5D5FCB", accent:"#E58CA0", fontDisplay:"Archivo", fontBody:"Space Grotesk" },
+  },
+  {
+    id:"amethyst", label:"Amethyst Haze",
+    dark:  { bg:"#0D0912", surface:"#17101F", border:"#291D35", text:"#F0EAF6", muted:"#847496", primary:"#9268C4", accent:"#C77DFF", fontDisplay:"Playfair Display", fontBody:"Inter" },
+    light: { bg:"#F9F6FC", surface:"#F0E9F8", border:"#DFD0EE", text:"#241631", muted:"#907ea3", primary:"#7A50AC", accent:"#A85FE0", fontDisplay:"Playfair Display", fontBody:"Inter" },
+  },
+  {
+    id:"orchid", label:"Orchid Night",
+    dark:  { bg:"#0F0912", surface:"#1A101E", border:"#2D1C33", text:"#F3EAF5", muted:"#8b7392", primary:"#B24BB0", accent:"#FFD166", fontDisplay:"Syne", fontBody:"Inter" },
+    light: { bg:"#FBF5FB", surface:"#F4E7F4", border:"#E6CEE6", text:"#291229", muted:"#9c7a9c", primary:"#983D96", accent:"#D9A93C", fontDisplay:"Syne", fontBody:"Inter" },
+  },
+  // MODRÁ
+  {
+    id:"dustyblue", label:"Dusty Blue",
+    dark:  { bg:"#090D10", surface:"#11181D", border:"#1F2A32", text:"#EAF0F4", muted:"#71828e", primary:"#7091A8", accent:"#C19066", fontDisplay:"Fraunces", fontBody:"DM Sans" },
+    light: { bg:"#F5F4F0", surface:"#EAE9E3", border:"#D6D4CA", text:"#20282E", muted:"#7d8a94", primary:"#5B7C93", accent:"#A87A50", fontDisplay:"Fraunces", fontBody:"DM Sans" },
+  },
+  {
+    id:"sapphire", label:"Sapphire Night",
+    dark:  { bg:"#060912", surface:"#0C121F", border:"#182236", text:"#E9EDF5", muted:"#6a7791", primary:"#3B5BDB", accent:"#7DD3FC", fontDisplay:"Archivo", fontBody:"Inter" },
+    light: { bg:"#F3F5FA", surface:"#E7EBF5", border:"#D0D8EA", text:"#141B2E", muted:"#74809a", primary:"#1E3A8A", accent:"#0284C7", fontDisplay:"Archivo", fontBody:"Inter" },
+  },
+  // TYRKYSOVÁ
+  {
+    id:"petrol", label:"Petrol Deep",
+    dark:  { bg:"#060E0E", surface:"#0C1919", border:"#182B2B", text:"#E7F1F1", muted:"#5f7d7d", primary:"#117E7E", accent:"#F4A261", fontDisplay:"Sora", fontBody:"Inter" },
+    light: { bg:"#F1F8F8", surface:"#E2EFEF", border:"#C7DFDF", text:"#0F2626", muted:"#638787", primary:"#0E6969", accent:"#DE8843", fontDisplay:"Sora", fontBody:"Inter" },
+  },
+  {
+    id:"aquaglass", label:"Aqua Glass",
+    dark:  { bg:"#081011", surface:"#0F1C1E", border:"#1C3033", text:"#E9F3F4", muted:"#688487", primary:"#45C4B0", accent:"#FFD6A5", fontDisplay:"Quicksand", fontBody:"DM Sans" },
+    light: { bg:"#F2FAFA", surface:"#E3F2F1", border:"#C9E4E2", text:"#122A2C", muted:"#6b8d8f", primary:"#2BA593", accent:"#E0AC69", fontDisplay:"Quicksand", fontBody:"DM Sans" },
+  },
+  {
+    id:"verdigris", label:"Verdigris",
+    dark:  { bg:"#070F0C", surface:"#0E1B16", border:"#1B2E26", text:"#E8F1ED", muted:"#637f74", primary:"#43AA8B", accent:"#B08968", fontDisplay:"Fraunces", fontBody:"DM Sans" },
+    light: { bg:"#F2F9F6", surface:"#E4F0EA", border:"#CBE1D6", text:"#12271F", muted:"#678a7c", primary:"#358B71", accent:"#96714E", fontDisplay:"Fraunces", fontBody:"DM Sans" },
+  },
+  // ZELENÁ
+  {
+    id:"sage", label:"Sage Calm",
+    dark:  { bg:"#0C0F09", surface:"#151A10", border:"#252D1D", text:"#EEF1E9", muted:"#7d8570", primary:"#7D8F69", accent:"#D6CFB5", fontDisplay:"Cormorant Garamond", fontBody:"DM Sans" },
+    light: { bg:"#F7F7F1", surface:"#EDEEE2", border:"#D9DBC8", text:"#20261A", muted:"#848c74", primary:"#68794F", accent:"#B0A784", fontDisplay:"Cormorant Garamond", fontBody:"DM Sans" },
+  },
+  {
+    id:"olive", label:"Olive Earth",
+    dark:  { bg:"#0C0D07", surface:"#15170D", border:"#262A18", text:"#EFF0E8", muted:"#80856d", primary:"#8A9A3B", accent:"#C19066", fontDisplay:"Fraunces", fontBody:"Inter" },
+    light: { bg:"#F8F8F0", surface:"#EFEFDF", border:"#DCDDC2", text:"#232614", muted:"#878c6e", primary:"#6B7F2A", accent:"#A87A50", fontDisplay:"Fraunces", fontBody:"Inter" },
+  },
+  {
+    id:"matcha", label:"Matcha Cream",
+    dark:  { bg:"#0B0F09", surface:"#141A10", border:"#242E1E", text:"#EDF1E9", muted:"#7b8570", primary:"#8FB573", accent:"#D4A373", fontDisplay:"Quicksand", fontBody:"DM Sans" },
+    light: { bg:"#F7FAF2", surface:"#ECF2E1", border:"#D6E2C4", text:"#1E2617", muted:"#7f8c6e", primary:"#74995A", accent:"#BC8A5F", fontDisplay:"Quicksand", fontBody:"DM Sans" },
+  },
+  // ŽLTÁ
+  {
+    id:"butter", label:"Butter Yellow",
+    dark:  { bg:"#100E07", surface:"#1B180D", border:"#2E2A18", text:"#F4F1E6", muted:"#8f8a72", primary:"#F4D35E", accent:"#3D405B", fontDisplay:"Poppins", fontBody:"Inter" },
+    light: { bg:"#FDFBF0", surface:"#F8F2DB", border:"#ECE0B8", text:"#292410", muted:"#99906c", primary:"#D9B33B", accent:"#3D405B", fontDisplay:"Poppins", fontBody:"Inter" },
+  },
+  {
+    id:"ochre", label:"Ochre Sun",
+    dark:  { bg:"#0F0C06", surface:"#1A150B", border:"#2C2415", text:"#F2EEE4", muted:"#8d846e", primary:"#C7952B", accent:"#7091A8", fontDisplay:"Archivo", fontBody:"Inter" },
+    light: { bg:"#FBF8EF", surface:"#F4ECDA", border:"#E5D7B8", text:"#28210F", muted:"#978b6c", primary:"#AA7E20", accent:"#5B7C93", fontDisplay:"Archivo", fontBody:"Inter" },
+  },
+  {
+    id:"honey", label:"Honey Amber",
+    dark:  { bg:"#100C06", surface:"#1B150B", border:"#2E2415", text:"#F3EEE4", muted:"#8f856e", primary:"#E39B25", accent:"#3A5A40", fontDisplay:"Fraunces", fontBody:"DM Sans" },
+    light: { bg:"#FCF8EF", surface:"#F6EDD9", border:"#E9D9B6", text:"#29210E", muted:"#998c6a", primary:"#C4831B", accent:"#3A5A40", fontDisplay:"Fraunces", fontBody:"DM Sans" },
+  },
+  // HNEDÁ
+  {
+    id:"mousse", label:"Mocha Mousse",
+    dark:  { bg:"#0F0B09", surface:"#1A1310", border:"#2C221D", text:"#F2ECE8", muted:"#8c7e75", primary:"#A47864", accent:"#E7CFBC", fontDisplay:"Playfair Display", fontBody:"DM Sans" },
+    light: { bg:"#F9F5F2", surface:"#F0E8E2", border:"#DFD1C7", text:"#291F19", muted:"#95857a", primary:"#8C6250", accent:"#6F4E37", fontDisplay:"Playfair Display", fontBody:"DM Sans" },
+  },
+  {
+    id:"claystudio", label:"Clay Studio",
+    dark:  { bg:"#100C09", surface:"#1B1410", border:"#2E231B", text:"#F2ECE7", muted:"#8e8074", primary:"#B66E41", accent:"#7091A8", fontDisplay:"Archivo", fontBody:"Inter" },
+    light: { bg:"#F9F5F1", surface:"#F0E7DF", border:"#DFCFC1", text:"#2A2016", muted:"#968677", primary:"#9E5C33", accent:"#5B7C93", fontDisplay:"Archivo", fontBody:"Inter" },
+  },
+  {
+    id:"oat", label:"Oat Latte",
+    dark:  { bg:"#0E0C09", surface:"#191510", border:"#2A241C", text:"#F1EDE7", muted:"#8b8377", primary:"#9C7C5C", accent:"#5F7161", fontDisplay:"Quicksand", fontBody:"DM Sans" },
+    light: { bg:"#F8F5F0", surface:"#EFE9DF", border:"#DED3C2", text:"#282218", muted:"#948977", primary:"#84674A", accent:"#51624F", fontDisplay:"Quicksand", fontBody:"DM Sans" },
+  },
+  {
+    id:"espresso", label:"Espresso Noir",
+    dark:  { bg:"#0D0907", surface:"#170F0B", border:"#291D15", text:"#F1EAE4", muted:"#897a6d", primary:"#6F4E37", accent:"#D4AF37", fontDisplay:"Cormorant Garamond", fontBody:"Inter" },
+    light: { bg:"#F8F4F0", surface:"#EFE6DE", border:"#DECDBF", text:"#271C13", muted:"#93816f", primary:"#5D4130", accent:"#B8902F", fontDisplay:"Cormorant Garamond", fontBody:"Inter" },
+  },
+  // NEUTRÁLNA
+  {
+    id:"clouddancer", label:"Cloud Dancer",
+    dark:  { bg:"#09090B", surface:"#131316", border:"#26262B", text:"#F0EEE9", muted:"#82827e", primary:"#D4D4D8", accent:"#C19066", fontDisplay:"Sora", fontBody:"Inter" },
+    light: { bg:"#F0EEE9", surface:"#E7E4DD", border:"#D3CFC5", text:"#2E2E2E", muted:"#8a8880", primary:"#3F3F46", accent:"#A87A50", fontDisplay:"Sora", fontBody:"Inter" },
+  },
+  {
+    id:"zinc", label:"Zinc Tech",
+    dark:  { bg:"#09090B", surface:"#131316", border:"#27272A", text:"#EDEDEF", muted:"#71717A", primary:"#D4D4D8", accent:"#38BDF8", fontDisplay:"Space Grotesk", fontBody:"Inter" },
+    light: { bg:"#FAFAFA", surface:"#F0F0F1", border:"#DEDEE1", text:"#18181B", muted:"#71717A", primary:"#3F3F46", accent:"#0284C7", fontDisplay:"Space Grotesk", fontBody:"Inter" },
+  },
+  {
+    id:"greige", label:"Greige Calm",
+    dark:  { bg:"#0C0B0A", surface:"#161412", border:"#282521", text:"#EFEDEA", muted:"#87817a", primary:"#B3A995", accent:"#A8763E", fontDisplay:"Fraunces", fontBody:"DM Sans" },
+    light: { bg:"#ECE7E1", surface:"#E2DCD4", border:"#CEC6BA", text:"#2B2823", muted:"#8d867c", primary:"#6E675C", accent:"#A8763E", fontDisplay:"Fraunces", fontBody:"DM Sans" },
+  },
+  {
+    id:"ink", label:"Ink Minimal",
+    dark:  { bg:"#0A0A0A", surface:"#141414", border:"#242424", text:"#F5F5F5", muted:"#6b6b6b", primary:"#FAFAFA", accent:"#EF4444", fontDisplay:"Archivo", fontBody:"Inter" },
+    light: { bg:"#FFFFFF", surface:"#F5F5F5", border:"#E2E2E2", text:"#111111", muted:"#8a8a8a", primary:"#18181B", accent:"#DC2626", fontDisplay:"Archivo", fontBody:"Inter" },
+  },
+];
+
+// ── Odtieň (hue) každého presetu — pre filter „Farba prvkov" ──
+const PRESET_HUES = {
+  magma:"orange", volt:"orange", copper:"orange", terracotta:"orange", apricot:"orange", sienna:"orange",
+  sunset:"red", crimson:"red", ruby:"red", cherry:"red", merlot:"red", rust:"red",
+  rose:"pink", bubblegum:"pink", sakura:"pink", blush:"pink", peach:"pink", fuchsia:"pink",
+  violet:"purple", plum:"purple", lavender:"purple", dusk:"purple", amethyst:"purple", orchid:"purple",
+  midnight:"blue", obsidian:"blue", steel:"blue", navy:"blue", dustyblue:"blue", sapphire:"blue",
+  ocean:"teal", arctic:"teal", lagoon:"teal", petrol:"teal", aquaglass:"teal", verdigris:"teal",
+  forest:"green", mint:"green", emerald:"green", sage:"green", olive:"green", matcha:"green",
+  ember:"yellow", lime:"yellow", gold:"yellow", butter:"yellow", ochre:"yellow", honey:"yellow",
+  sand:"brown", mocha:"brown", mousse:"brown", claystudio:"brown", oat:"brown", espresso:"brown",
+  slate:"neutral", carbon:"neutral", clouddancer:"neutral", zinc:"neutral", greige:"neutral", ink:"neutral",
+};
+const HUE_OPTIONS = [
+  { id:"orange", label:"Oranžová",   color:"#ff6a00" },
+  { id:"red",    label:"Červená",    color:"#ef4444" },
+  { id:"pink",   label:"Ružová",     color:"#ec4899" },
+  { id:"purple", label:"Fialová",    color:"#a855f7" },
+  { id:"blue",   label:"Modrá",      color:"#3b82f6" },
+  { id:"teal",   label:"Tyrkysová",  color:"#14b8a6" },
+  { id:"green",  label:"Zelená",     color:"#22c55e" },
+  { id:"yellow", label:"Žltá / Zlatá", color:"#eab308" },
+  { id:"brown",  label:"Hnedá",      color:"#a07040" },
+  { id:"neutral",label:"Neutrálna",  color:"#9ca3af" },
 ];
 
 // Build flat PRESETS map: "Midnight Indigo Dark" / "Midnight Indigo Light"
@@ -735,6 +1198,12 @@ const LANGUAGE_OPTIONS = [
 ].sort((a,b)=>a.localeCompare(b,"sk"));
 // Personalizovaný placeholder pre poznámku k odvetviu
 const INDUSTRY_NOTE_HINTS = {
+  agro:          "napr. rozloha, plodiny/chov, bio certifikácia, odberné miesta...",
+  crafts:        "napr. región pôsobenia, pohotovostná služba, roky praxe, certifikáty...",
+  media:         "napr. periodicita obsahu, cieľové publikum, platformy, monetizácia...",
+  family:        "napr. kapacita, veková skupina, program, otváracie hodiny...",
+  hr:            "napr. špecializácia na odvetvia, región, pre firmy/kandidátov...",
+  events:        "napr. typy akcií, kapacita, región pôsobenia, vlastný sklad techniky...",
   automotive:    "napr. predaj a servis vozidiel, autorizovaný zástupca značky, 12 servisných boxov...",
   creative:      "napr. štýl fotografie/hudby, doterajšie referencie, typ klientely...",
   ecommerce:     "napr. počet produktov v ponuke, dodacie podmienky, prepojenie na sklad...",
@@ -752,6 +1221,61 @@ const INDUSTRY_NOTE_HINTS = {
   tech:          "napr. cieľová skupina používateľov, model spoplatnenia, fáza projektu...",
   travel:        "napr. typ ubytovania/zájazdov, sezónnosť, kapacita...",
   wellness:      "napr. ponúkané procedúry, kapacita prevádzky, cieľová klientela...",
+};
+
+// ── CTA TLAČIDLO V NAVIGÁCII — návrhy podľa odvetvia ──────
+const NAV_CTA_SUGGESTIONS = {
+  agro:          ["Objednať z dvora","Naše produkty","Kontakt"],
+  crafts:        ["Nezáväzná ponuka","Zavolajte nám","Objednať termín"],
+  media:         ["Odoberať","Počúvať / Sledovať","Podporiť nás"],
+  family:        ["Zápis / Prihláška","Prísť na návštevu","Kontakt"],
+  hr:            ["Voľné pozície","Hľadám ľudí","Konzultácia"],
+  events:        ["Nezáväzný dopyt","Rezervovať termín","Cenník"],
+  automotive:    ["Objednať termín","Nezáväzná ponuka","Zavolajte nám"],
+  creative:      ["Booking","Nezáväzný dopyt","Portfólio"],
+  ecommerce:     ["Nakupovať","Do e-shopu","Akcie"],
+  education:     ["Prihláška","Naše kurzy","Konzultácia"],
+  finance:       ["Konzultácia zdarma","Dohodnúť stretnutie","Kalkulačka"],
+  gastro:        ["Rezervovať stôl","Objednať online","Menu"],
+  health:        ["Objednať sa","Rezervovať termín","Kontakt"],
+  manufacturing: ["Dopyt","Cenová ponuka","Katalóg"],
+  nonprofit:     ["Podporiť nás","Prispieť","Zapojiť sa"],
+  pets:          ["Objednať termín","Rezervácia","Kontakt"],
+  public:        ["Kontakt","Úradné hodiny","Podnety"],
+  realty:        ["Ponuka nehnuteľností","Nezáväzný dopyt","Ohodnotiť nehnuteľnosť"],
+  services:      ["Cenová ponuka","Konzultácia zdarma","Dopyt"],
+  sportoutdoor:  ["Rezervovať","Členstvo","Rozvrh"],
+  tech:          ["Vyskúšať zadarmo","Demo","Začať"],
+  travel:        ["Rezervovať","Ponuky","Dostupnosť"],
+  wellness:      ["Objednať sa","Rezervácia","Darčekové poukazy"],
+  _default:      ["Kontaktujte nás","Zavolajte nám","Cenová ponuka"],
+};
+
+// ── SEO nadpis — návrhy podľa odvetvia (dopĺňa sa mesto z adresy) ──
+const SEO_TAILS = {
+  agro:          "poctivé produkty priamo od nás",
+  crafts:        "spoľahlivé remeslo a férové ceny",
+  media:         "obsah, ktorý stojí za pozornosť",
+  family:        "starostlivosť, ktorej deti dôverujú",
+  hr:            "správni ľudia na správnom mieste",
+  events:        "váš deň presne podľa predstáv",
+  automotive:    "profesionálny servis a férové ceny",
+  creative:      "kreatívne projekty na mieru",
+  ecommerce:     "rýchle doručenie a overená kvalita",
+  education:     "kurzy, ktoré vás posunú ďalej",
+  finance:       "bezpečné riešenia pre vaše financie",
+  gastro:        "poctivá kuchyňa z čerstvých surovín",
+  health:        "starostlivosť, ktorej môžete dôverovať",
+  manufacturing: "spoľahlivý partner pre vašu výrobu",
+  nonprofit:     "pomáhame tam, kde to má zmysel",
+  pets:          "starostlivosť o vašich miláčikov",
+  public:        "informácie a služby na jednom mieste",
+  realty:        "nehnuteľnosti bez starostí",
+  services:      "profesionálne služby na mieru",
+  sportoutdoor:  "zážitky a výkon na prvom mieste",
+  tech:          "moderné riešenia pre váš rast",
+  travel:        "oddych, aký si zaslúžite",
+  wellness:      "doprajte si čas pre seba",
 };
 
 const INTEGRATION_OPTIONS = [
@@ -817,10 +1341,10 @@ const GOOGLE_FONTS_URL = "https://fonts.googleapis.com/css2?" +
     .join("&") + "&display=swap";
 
 const TYPE_DEFAULTS = {
-  landing:   ["nav","hero","features","logos","testimonials","cta","footer","cookies","scrolltop"],
-  corporate: ["nav","hero","about","services","team","stats","contact","footer","cookies","scrolltop"],
-  ecommerce: ["nav","hero","products","features","testimonials","newsletter","footer","cookies","scrolltop"],
-  portfolio: ["nav","hero","work","about","process","contact","footer","scrolltop"],
+  landing:   ["nav","hero","features","logos","testimonials","cta","cookies","scrolltop","404","gdpr","footer"],
+  corporate: ["nav","hero","about","services","team","stats","contact","cookies","scrolltop","404","gdpr","footer"],
+  ecommerce: ["nav","hero","products","features","testimonials","newsletter","cookies","scrolltop","404","gdpr","footer"],
+  portfolio: ["nav","hero","work","about","process","contact","scrolltop","404","gdpr","footer"],
 };
 
 const ADDRESS_TYPES = [
@@ -834,6 +1358,35 @@ const ADDRESS_TYPES = [
 function makeAddress(type) {
   return { id:Math.random().toString(36).slice(2,8), type:type||"office", street:"", city:"", zip:"", country:"Slovensko" };
 }
+
+// ── OTVÁRACIE HODINY / PRACOVNÁ DOBA ────────────────────────
+const OH_DAYS = [
+  { id:"mon", label:"Pondelok", short:"Po" },
+  { id:"tue", label:"Utorok",   short:"Ut" },
+  { id:"wed", label:"Streda",   short:"St" },
+  { id:"thu", label:"Štvrtok",  short:"Št" },
+  { id:"fri", label:"Piatok",   short:"Pi" },
+  { id:"sat", label:"Sobota",   short:"So" },
+  { id:"sun", label:"Nedeľa",   short:"Ne" },
+];
+function defaultOpeningHours() {
+  const days = {};
+  OH_DAYS.forEach(d => {
+    const weekday = !["sat","sun"].includes(d.id);
+    days[d.id] = { open:weekday, from:"08:00", to:"17:00", brk:false, brkFrom:"12:00", brkTo:"12:30" };
+  });
+  return { days, holidaysOpen:false };
+}
+
+// ── SOCIÁLNE SIETE — linky na profily klienta ───────────────
+const SOCIAL_NETWORKS = [
+  { id:"facebook",  label:"Facebook",  icon:"📘", ph:"https://facebook.com/vasa-stranka" },
+  { id:"instagram", label:"Instagram", icon:"📸", ph:"https://instagram.com/vas-profil" },
+  { id:"tiktok",    label:"TikTok",    icon:"🎵", ph:"https://tiktok.com/@vas-profil" },
+  { id:"youtube",   label:"YouTube",   icon:"▶️", ph:"https://youtube.com/@vas-kanal" },
+  { id:"linkedin",  label:"LinkedIn",  icon:"💼", ph:"https://linkedin.com/company/vasa-firma" },
+  { id:"x",         label:"X (Twitter)", icon:"𝕏", ph:"https://x.com/vas-profil" },
+];
 
 // ── PODKLADY — linky na súbory od klienta ───────────────────
 const ASSET_TYPES = [
@@ -867,13 +1420,16 @@ const DEFAULT_BRIEF = {
   companyName:"", ico:"", dic:"", icdph:"",
   phone:"", email:"", web:"",
   addresses: [makeAddress("headquarters")],
+  openingHours: defaultOpeningHours(),
+  gmapsStatus:"", gmapsUrl:"", bingStatus:"", bingUrl:"",
+  socials: { facebook:"", instagram:"", tiktok:"", youtube:"", linkedin:"", x:"" },
   pageStructure:"onepage", subpages:"",
-  colorTheme:"dark", themeToggle:"no",
+  colorTheme:"system", themeToggle:"no",
   navBehavior:"sticky", navBackground:"solid", navLayout:"top", navLogo:"left",
-  navAlwaysHamburger:false, navSocials:false,
-  heroStyle:"minimal", heroMedia:"none", heroMediaUrl:"",
+  navAlwaysHamburger:true, navSocials:false,
+  heroStyle:"minimal", heroMedia:"none", heroMediaUrl:"", heroSlider:"", heroMediaUploads:[], navCta:"",
   heroSeo:"", heroCtas:[],
-  sectionNotes:{},
+  sectionNotes:{}, sectionsAutoOrder:true,
   goal:"", audience:"", tone:"", brief:"", extra:"",
   assets:[],
   sections: TYPE_DEFAULTS.landing,
@@ -1099,6 +1655,8 @@ const SCHEMA_TYPE_MAP = {
   nonprofit:"NGO", automotive:"AutomotiveBusiness", finance:"FinancialService",
   manufacturing:"Organization", pets:"Store", public:"GovernmentOrganization",
   sportoutdoor:"SportsActivityLocation", travel:"TouristTrip",
+  agro:"LocalBusiness", crafts:"HomeAndConstructionBusiness", media:"MediaOrganization",
+  family:"ChildCare", hr:"EmploymentAgency", events:"EventVenue",
 };
 
 // ─── META TAGS / OPEN GRAPH GENERÁTOR ──────────────────────
@@ -1167,6 +1725,17 @@ function generateSchemaOrg(b) {
       }
     } : {}),
     ...(b.ico ? { "vatID": b.icdph || b.ico } : {}),
+    // Otváracie hodiny → schema.org openingHours (napr. "Mo 08:00-17:00")
+    ...(()=>{
+      const MAP = { mon:"Mo", tue:"Tu", wed:"We", thu:"Th", fri:"Fr", sat:"Sa", sun:"Su" };
+      const days = b.openingHours?.days;
+      if (!days) return {};
+      const arr = Object.entries(MAP)
+        .filter(([k]) => days[k]?.open && days[k]?.from && days[k]?.to)
+        .map(([k, code]) => `${code} ${days[k].from}-${days[k].to}`);
+      return arr.length ? { "openingHours": arr } : {};
+    })(),
+    ...(b.gmapsStatus==="have" && b.gmapsUrl ? { "hasMap": b.gmapsUrl } : {}),
   };
 
   return JSON.stringify(obj, null, 2);
@@ -1399,6 +1968,9 @@ const ACCORDION_BASE = [
       { id:"info-industry", label:"Odvetvie" },
       { id:"info-company",  label:"Firemné údaje" },
       { id:"info-address",  label:"Adresy" },
+      { id:"info-hours",    label:"Otváracie hodiny" },
+      { id:"info-socials",  label:"Sociálne siete" },
+      { id:"info-details",  label:"Detaily projektu" },
     ],
   },
   {
@@ -1411,6 +1983,16 @@ const ACCORDION_BASE = [
     ],
   },
   {
+    id:"brand", label:"Dizajn", icon:"🎨",
+    subs:[
+      { id:"brand-logo",   label:"Logo" },
+      { id:"brand-preset", label:"Presety" },
+      { id:"brand-colors", label:"Farby" },
+      { id:"brand-fonts",  label:"Typografia" },
+      { id:"brief-nav",    label:"Téma" },
+    ],
+  },
+  {
     id:"content", label:"Obsah webu", icon:"☰",
     subs:[
       { id:"content-core",    label:"Základ" },
@@ -1418,6 +2000,7 @@ const ACCORDION_BASE = [
       { id:"content-social",  label:"Social proof" },
       { id:"content-convert", label:"Konverzia" },
       { id:"content-extra",   label:"Extra" },
+      { id:"content-integrations", label:"Integrácie a nástroje" },
     ],
   },
   {
@@ -1426,40 +2009,24 @@ const ACCORDION_BASE = [
       { id:"assets-files", label:"Linky na podklady" },
     ],
   },
-  {
-    id:"brand", label:"Dizajn", icon:"🎨",
-    subs:[
-      { id:"brand-logo",   label:"Logo" },
-      { id:"brand-preset", label:"Presety" },
-      { id:"brand-colors", label:"Farby" },
-      { id:"brand-fonts",  label:"Typografia" },
-      { id:"brief-nav",    label:"Navigácia & Téma" },
-    ],
-  },
-  {
-    id:"tech", label:"Technické detaily", icon:"⚙️",
-    subs:[
-      { id:"info-details", label:"Doména, hosting, CMS" },
-    ],
-  },
 ];
 
-// ── Poradie blokov v strede (flex order) — dáta najprv, dizajn potom ──
+// ── Poradie blokov v strede (flex order) — dáta, texty, dizajn, obsah ──
 const BLOCK_ORDER = {
-  "info-project":1, "info-industry":2, "info-company":3, "info-address":4,
-  "brief-type":5, "brief-structure":6, "brief-goal":7, "brief-desc":8,
-  "content-core":9, "content-content":10, "content-social":11, "content-convert":12, "content-extra":13,
-  "assets-files":14,
-  "brand-logo":15, "brand-preset":16, "brand-colors":17, "brand-fonts":18, "brief-nav":19,
-  "info-details":20,
-  "wiz-summary":21,
+  "info-project":1, "info-industry":2, "info-company":3, "info-address":4, "info-hours":5, "info-socials":6, "info-details":7,
+  "brief-type":8, "brief-structure":9, "brief-goal":10, "brief-desc":11,
+  "brand-logo":12, "brand-preset":13, "brand-colors":14, "brand-fonts":15, "brief-nav":16,
+  "content-core":17, "content-content":18, "content-social":19, "content-convert":20, "content-extra":21,
+  "content-integrations":22,
+  "assets-files":23,
+  "wiz-summary":24,
 };
-const CAT_BLOCK_ORDER = { core:9, content:10, social:11, convert:12, extra:13 };
+const CAT_BLOCK_ORDER = { core:17, content:18, social:19, convert:20, extra:21 };
 
 // ── WIZARD — sprievodca pre jednoduchý režim ────────────────
 // Každý krok = zoznam blokov, ktoré sú v ňom viditeľné.
 const WIZARD_STEPS = [
-  { id:"data",    icon:"🏢", blocks:["info-project","info-industry","info-company","info-address"] },
+  { id:"data",    icon:"🏢", blocks:["info-project","info-industry","info-company","info-address","info-hours","info-socials"] },
   { id:"texts",   icon:"📝", blocks:["brief-type","brief-goal","brief-desc"] },
   { id:"content", icon:"☰",  blocks:["content-core","content-content","content-social","content-convert","content-extra"] },
   { id:"assets",  icon:"📎", blocks:["assets-files"] },
@@ -1480,7 +2047,7 @@ const WF_SECTIONS = {
 };
 const NEUTRAL_SECS = ["nav","footer","logos","stats","cookies","scrolltop","darkmode","loader","search"];
 
-export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin }) {
+export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin, saveState, onSaveNow }) {
   // ── i18n: lokalizované dátové zdroje podľa jazyka briefu ──
   const lang = brief.lang || "sk";
   const SECTIONS   = useMemo(() => localizeSections(SECTIONS_BASE, lang), [lang]);
@@ -1516,6 +2083,9 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   const [copied, setCopied]       = useState(false);
   const [expandedSec, setExpSec]  = useState(null); // id of section with open detail panel
   const [presetOpen, setPresetOpen] = useState(false);
+  const [presetHue, setPresetHue] = useState(null);        // filter presetov podľa farby prvkov
+  const [presetShowAll, setPresetShowAll] = useState(false); // zobraziť viac než 6
+  const [presetOtherOpen, setPresetOtherOpen] = useState(false); // presety v inej palete
   const [colorsOpen, setColorsOpen] = useState(false);
   const [fontsOpen, setFontsOpen]   = useState(false);
   const [industryOpen, setIndustryOpen] = useState(false);
@@ -1524,10 +2094,24 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   const [citySearch, setCitySearch] = useState({}); // {[addrId]: {query, open}}
   const [industrySearch, setIndustrySearch] = useState("");
   const [dragId, setDragId]       = useState(null); // section being dragged
+  const [othersOpen, setOthersOpen] = useState({}); // {catId:true} — rozkliknuté „ostatné sekcie"
   const [dragOver, setDragOver]   = useState(null); // section currently hovered over
   const [leftOpen, setLeftOpen]   = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [rightSize, setRightSize] = useState("normal"); // normal | wide | full | overlay
+  // Dynamická šírka pravého stĺpca (stredný je 1fr — prispôsobí sa automaticky)
+  const [rightW, setRightW] = useState(460);
+  const startRightResize = (e) => {
+    e.preventDefault();
+    const startX = e.clientX, startW = rightW;
+    const onMove = (ev) => setRightW(Math.min(900, Math.max(280, startW + (startX - ev.clientX))));
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
   const [isMobile, setIsMobile]   = useState(typeof window!=="undefined" && window.innerWidth<860);
   const [mobilePane, setMobilePane] = useState("form"); // mobile: nav | form | preview
 
@@ -1553,11 +2137,33 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
 
   const [fontPicker, setFontPicker] = useState(null); // "fontDisplay" | "fontBody" | null
 
-  const c  = { ...THEMES[theme], pri: brief.brand.primary };
+  // Fixný MediaVolt accent — nezávisí od vybratej farebnej témy briefu
+  const c  = { ...MV_THEME, pri: "#ff6a00" };
   const br = brief.brand;
 
   const selectType    = (id)    => update({ webType:id, sections:TYPE_DEFAULTS[id] });
-  const toggleSec     = (id)    => update({ sections: brief.sections.includes(id) ? brief.sections.filter(s=>s!==id) : [...brief.sections,id] });
+  // Zvýraznenie naposledy zakliknutej sekcie vo web náhľade
+  const [highlightSec, setHighlightSec] = useState(null);
+  const toggleSec     = (id)    => {
+    // 404 a GDPR sú vždy súčasťou webu — nedajú sa odškrtnúť
+    if (LOCKED_SECTIONS.includes(id) && brief.sections.includes(id)) return;
+    const adding = !brief.sections.includes(id);
+    setHighlightSec(adding ? id : null);
+    let next = adding ? [...brief.sections,id] : brief.sections.filter(s=>s!==id);
+    // Auto-zoradenie: nové sekcie sa zaraďujú podľa bežného odporúčaného poradia
+    if (adding && brief.sectionsAutoOrder !== false) next = sortByRecommended(next);
+    update({ sections: next });
+  };
+
+  // Auto-doplnenie: zamknuté sekcie vždy prítomné; jazykový prepínač pri 2+ jazykoch
+  useEffect(()=>{
+    const missing = LOCKED_SECTIONS.filter(id=>!brief.sections.includes(id));
+    const needLang = (brief.techLanguages||[]).length>1 && !brief.sections.includes("language");
+    if (missing.length || needLang) {
+      update({ sections:[...brief.sections, ...missing, ...(needLang?["language"]:[])] });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[brief.sections, brief.techLanguages]);
   const applyPreset   = (name)  => update({ preset:name, brand:PRESETS[name] });
   const updateBrand   = (k,v)   => update({ preset:"Custom", brand:{ ...br, [k]:v } });
   const addAddress    = ()      => update({ addresses:[...brief.addresses, makeAddress("office")] });
@@ -1566,6 +2172,45 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   const addAsset      = (type)  => update({ assets:[...(brief.assets||[]), makeAsset(type)] });
   const removeAsset   = (id)    => update({ assets:(brief.assets||[]).filter(a=>a.id!==id) });
   const updateAsset   = (id,k,v)=> update({ assets:(brief.assets||[]).map(a=>a.id===id?{...a,[k]:v}:a) });
+
+  // Konverzia obrázka do WebP (canvas) — šetrí veľkosť pri ukladaní do briefu
+  const fileToWebp = (file) => new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) { reject(new Error("not image")); return; }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      try {
+        const MAX = 1600; // rozumný strop rozlíšenia pre referenčný vizuál
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(img.width * scale);
+        cv.height = Math.round(img.height * scale);
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        URL.revokeObjectURL(url);
+        resolve({
+          name: file.name.replace(/\.[^.]+$/, "") + ".webp",
+          data: cv.toDataURL("image/webp", 0.85),
+        });
+      } catch (e) { URL.revokeObjectURL(url); reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("load failed")); };
+    img.src = url;
+  });
+
+  // Pridanie viacerých hero vizuálov — každý sa skonvertuje do WebP
+  const addHeroVisuals = async (files) => {
+    if (!files || !files.length) return;
+    const results = [];
+    for (const file of Array.from(files)) {
+      try { results.push(await fileToWebp(file)); } catch { /* preskoč ne-obrázky */ }
+    }
+    if (results.length) {
+      const withIds = results.map(r => ({ id: Math.random().toString(36).slice(2,8), ...r }));
+      update({ heroMediaUploads: [ ...(brief.heroMediaUploads||[]), ...withIds ] });
+    }
+  };
+  const removeHeroVisual = (id) =>
+    update({ heroMediaUploads: (brief.heroMediaUploads||[]).filter(v => v.id !== id) });
 
   const handleLogoUpload = (placementId, file) => {
     if(!file) return;
@@ -1670,14 +2315,26 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
     const matches = (text) => { const n=normalize(text); return terms.every(t=>n.includes(t)); };
     const results = [];
     INDUSTRIES.forEach(ind=>{
-      const groupMatch = matches(ind.label);
-      const matchedSubs = ind.subs.filter(s=>matches(s.label) || matches(s.desc));
+      // Hľadá v slovenskom labeli/popise AJ v anglických aliasoch
+      const groupMatch = matches(`${ind.label} ${EN_ALIAS_CAT[ind.id]||""}`);
+      const matchedSubs = ind.subs.filter(s=>matches(`${s.label} ${s.desc} ${EN_ALIAS_SUB[s.id]||""}`));
       if(groupMatch || matchedSubs.length>0){
         results.push({ ...ind, matchedSubs: groupMatch ? ind.subs : matchedSubs, groupMatch });
       }
     });
     return results;
   }, [industrySearch]);
+  // Návrh SEO nadpisu podľa vybraného odvetvia + mesta z adresy
+  const seoSuggestion = useMemo(()=>{
+    const ind = INDUSTRIES.find(i=>i.id===brief.industry);
+    if(!ind) return "";
+    const sub = ind.subs?.find(x=>x.id===brief.industrySubcat);
+    const city = (brief.addresses||[]).find(a=>a.city)?.city?.replace(/ - .*/,"") || "";
+    const base = sub ? sub.label.split("/")[0].trim() : ind.label.split("/")[0].trim();
+    const tail = SEO_TAILS[brief.industry] || "kvalitné služby pre vás";
+    return `${base}${city?` ${city}`:""} — ${tail}`;
+  },[brief.industry, brief.industrySubcat, JSON.stringify(brief.addresses), INDUSTRIES]);
+
   const code   = useMemo(()=>generateCode(brief),  [JSON.stringify(brief)]);
   const robotsTxt = useMemo(()=>generateRobots(brief), [JSON.stringify(brief)]);
   const sitemapXml = useMemo(()=>generateSitemap(brief), [JSON.stringify(brief)]);
@@ -1686,9 +2343,13 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   const envExample = useMemo(()=>generateEnvExample(brief), [JSON.stringify(brief)]);
   const readmeMd = useMemo(()=>generateReadme(brief), [JSON.stringify(brief)]);
   const cookieConsent = useMemo(()=>generateCookieConsent(brief), [JSON.stringify(brief)]);
+  // Právne dokumenty — súhlas so spracovaním údajov + cookies policy (vzor interez.sk, auto-doplnené firemné údaje)
+  const privacyPolicyDoc = useMemo(()=>generatePrivacyPolicy(brief), [JSON.stringify(brief)]);
+  const cookiesPolicyDoc = useMemo(()=>generateCookiesPolicy(brief), [JSON.stringify(brief)]);
   const humansTxt = useMemo(()=>generateHumansTxt(brief), [JSON.stringify(brief)]);
-  const [toolsTab, setToolsTab] = useState("robots"); // robots|sitemap|meta|schema|env|readme|cookies|favicon|prelaunch|md
+  const [toolsTab, setToolsTab] = useState("robots"); // robots|sitemap|meta|schema|env|readme|cookies|gdprdoc|cookiesdoc|favicon|prelaunch|md
   const TOOLS_TEXT_MAP = {
+    gdprdoc: privacyPolicyDoc, cookiesdoc: cookiesPolicyDoc,
     robots:robotsTxt, sitemap:sitemapXml, meta:metaTags, schema:schemaOrg,
     env:envExample, readme:readmeMd, cookies:cookieConsent, md:brief.adminMdNotes||"",
   };
@@ -1706,9 +2367,9 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   const orderedSecs = brief.sections.map(id=>SECTIONS.find(s=>s.id===id)).filter(Boolean);
 
   const S = {
-    root:   { height:"100vh", background:c.bg, color:c.text, fontFamily:"'Inter',system-ui,sans-serif", fontSize:13, transition:"background .2s,color .2s", display:"flex", flexDirection:"column" },
+    root:   { height: isAdmin ? "calc(100vh - var(--wq-admin-h, 148px))" : "100vh", background:c.bg, color:c.text, fontFamily:"'Space Grotesk',system-ui,sans-serif", fontSize:13, transition:"background .2s,color .2s", display:"flex", flexDirection:"column" },
     header: { background:c.panel, borderBottom:`1px solid ${c.border}`, padding:"0.7rem 1.25rem", display:"flex", alignItems:"center", gap:"0.75rem", flexShrink:0 },
-    logo:   { fontWeight:800, fontSize:"0.9rem", letterSpacing:"-0.02em", color:c.text },
+    logo:   { fontWeight:800, fontSize:"0.9rem", letterSpacing:"-0.02em", color:c.text, fontFamily:"'Syne','Space Grotesk',sans-serif" },
     adminBadge:{ background:`${c.pri}20`, color:c.pri, fontSize:"0.62rem", fontWeight:700, padding:"0.2rem 0.55rem", borderRadius:20, letterSpacing:"0.06em" },
     hRight: { display:"flex", alignItems:"center", gap:"0.625rem", marginLeft:"auto" },
     live:   { display:"flex", alignItems:"center", gap:"0.35rem", fontSize:"0.68rem", color:"#22c55e" },
@@ -1722,7 +2383,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                   ? "0px 0px 1fr"
                   : rightSize==="wide"
                     ? "0px 1fr 9fr"
-                    : `${simple?"0px":(leftOpen?"210px":"56px")} 1fr ${rightOpen?"250px":"40px"}`,
+                    : `${simple?"0px":(leftOpen?"210px":"56px")} 1fr ${rightOpen?`${rightW}px`:"40px"}`,
               overflow:"hidden", minHeight:0,
               transition:"grid-template-columns .25s cubic-bezier(0.4,0,0.2,1)" },
     panelToggle:(side)=>({ position:"absolute", top:"50%", [side]:0,
@@ -1765,15 +2426,15 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                 fontSize:"0.62rem", color:c.muted, letterSpacing:"0.08em", textTransform:"uppercase", userSelect:"none" },
     accHdr: (open)=>({ display:"flex", alignItems:"center", gap:"0.55rem", padding:"0.7rem 0.875rem",
                        cursor:"pointer", border:"none", background:"transparent",
-                       color:c.text, fontSize:"0.8rem", fontWeight:600, width:"100%", textAlign:"left",
+                       color:c.pri, fontSize:"0.8rem", fontWeight:600, width:"100%", textAlign:"left",
                        borderBottom:`1px solid ${c.border}` }),
     accIcon:{ fontSize:"0.95rem", width:18, textAlign:"center", flexShrink:0 },
     accChevron:(open)=>({ marginLeft:"auto", fontSize:"0.6rem", color:open?c.pri:c.muted, transform:open?"rotate(90deg)":"none", transition:"transform .15s,color .15s" }),
     subItem:(a)=>({ display:"flex", alignItems:"center", gap:"0.5rem", padding:"0.5rem 0.875rem 0.5rem 2.25rem",
                     cursor:"pointer", border:"none", background:a?c.card:"transparent",
-                    color:a?c.pri:c.muted, fontSize:"0.74rem", fontWeight:a?600:400,
+                    color:a?c.pri:"#ff9540", fontSize:"0.74rem", fontWeight:a?600:400,
                     borderLeft:`2px solid ${a?c.pri:"transparent"}`, width:"100%", textAlign:"left", transition:"all .1s" }),
-    subDot: (a)=>({ width:5, height:5, borderRadius:"50%", background:a?c.pri:c.muted, flexShrink:0 }),
+    subDot: (a)=>({ width:5, height:5, borderRadius:"50%", background:a?c.pri:"#ff9540", flexShrink:0 }),
     navBottom:{ marginTop:"auto", padding:"0.875rem", borderTop:`1px solid ${c.border}` },
     navProgress:{ fontSize:"0.62rem", color:c.muted, marginBottom:"0.4rem" },
     progressBar:{ height:3, background:c.border, borderRadius:2, overflow:"hidden" },
@@ -1813,7 +2474,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
     removeBtn:{ marginLeft:"auto", background:"transparent", border:`1px solid ${c.border}`, borderRadius:5, padding:"0.175rem 0.45rem", cursor:"pointer", fontSize:"0.65rem", color:c.muted, minHeight:"unset" },
 
     // RIGHT
-    right:  { borderLeft:rightSize==="full"?"none":`1px solid ${c.border}`, display:"flex", flexDirection:"column", background:c.panel, overflow:"hidden", gridColumn:"3", minWidth:0 },
+    right:  { borderLeft:rightSize==="full"?"none":`1px solid ${c.border}`, display:"flex", flexDirection:"column", background:c.panel, overflow:"hidden", gridColumn:"3", minWidth:0, position:"relative" },
     rModeRow:{ display:"flex", gap:"0.25rem", padding:"0.625rem 0.75rem", borderBottom:`1px solid ${c.border}`, flexShrink:0, overflowX:"auto", scrollbarWidth:"thin" },
     rModeBtn:(a)=>({ flex:"0 0 auto", whiteSpace:"nowrap", padding:"0.35rem 0.65rem", borderRadius:6, border:`1px solid ${a?c.pri:c.border}`, background:a?`${c.pri}20`:"transparent", color:a?c.pri:c.muted, cursor:"pointer", fontSize:"0.68rem", fontWeight:a?700:400 }),
     rBody:  { flex:1, overflowY:"auto", padding:"0.875rem" },
@@ -1835,32 +2496,32 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   // Blok s poradím podľa BLOCK_ORDER (flex order v strednom paneli)
   const BLK = (id) => ({ ...S.block, order: BLOCK_ORDER[id] ?? 50 });
 
+  // Poradie veľkostí náhľadu — kroky Rozšíriť/Zúžiť idú po tomto rebríčku
+  const RIGHT_SIZES = ["normal","overlay","wide","full"];
+  const rightSizeIdx = RIGHT_SIZES.indexOf(rightSize);
   const RightControlRow = () => (
     !isMobile && (
       <div style={{...S.rModeRow, justifyContent:"flex-end", gap:"0.35rem"}}>
-        {rightSize==="normal" && (
+        {/* Zúžiť o krok — viditeľné vždy keď nie je najužší stav */}
+        {rightSizeIdx > 0 && (
           <button
-            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.5rem"}}
-            onClick={()=>setRightSize("overlay")}
-            title="Roztiahnuť cez väčšinu obrazovky (prekryje ostatné panely)">⛶</button>
+            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.55rem",display:"flex",alignItems:"center",gap:"0.3rem"}}
+            onClick={()=>setRightSize(RIGHT_SIZES[rightSizeIdx-1])}
+            title={`Zúžiť náhľad o krok (${RIGHT_SIZES[rightSizeIdx-1]})`}>⤡ Zúžiť</button>
         )}
-        {rightSize==="overlay" && (
+        {/* Rozšíriť o krok */}
+        {rightSizeIdx < RIGHT_SIZES.length-1 && (
           <button
-            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.5rem"}}
-            onClick={()=>setRightSize("wide")}
-            title="Roztiahnuť takmer na celú šírku">⤢</button>
+            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.55rem",display:"flex",alignItems:"center",gap:"0.3rem"}}
+            onClick={()=>setRightSize(RIGHT_SIZES[rightSizeIdx+1])}
+            title={`Rozšíriť náhľad o krok (${RIGHT_SIZES[rightSizeIdx+1]})`}>⤢ Rozšíriť</button>
         )}
-        {rightSize==="wide" && (
-          <button
-            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.5rem"}}
-            onClick={()=>setRightSize("full")}
-            title="Roztiahnuť cez celé okno">⛶</button>
-        )}
+        {/* Reset na úzky stĺpec — z hociktorého rozšíreného stavu */}
         {rightSize!=="normal" && (
           <button
-            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.5rem"}}
+            style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.55rem"}}
             onClick={()=>setRightSize("normal")}
-            title="Vrátiť pôvodnú šírku">⤡</button>
+            title="Vrátiť na úzky náhľad v pravom stĺpci">✕</button>
         )}
         {rightSize==="normal" && (
           <button style={{...S.rModeBtn(false),flex:"unset",padding:"0.35rem 0.5rem"}} onClick={()=>setRightOpen(false)} title="Zbaliť náhľad">▶</button>
@@ -1872,11 +2533,67 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
   const RightModeRow = () => (
     <div style={S.rModeRow}>
       <button style={S.rModeBtn(rightMode==="wireframe")} onClick={()=>setRightMode("wireframe")}>Náhľad</button>
+      <button style={S.rModeBtn(rightMode==="template")} onClick={()=>setRightMode("template")}>Šablóna</button>
       {isAdmin && <button style={S.rModeBtn(rightMode==="prompt")} onClick={()=>setRightMode("prompt")}>Prompt</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="webview")} onClick={()=>setRightMode("webview")}>{T("webPreview")}</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="code")} onClick={()=>setRightMode("code")}>Kód</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="notes")} onClick={()=>setRightMode("notes")}>Poznámky</button>}
       {isAdmin && <button style={S.rModeBtn(rightMode==="tools")} onClick={()=>setRightMode("tools")}>Nástroje</button>}
+    </div>
+  );
+
+  // Náhľad stránky v rámikoch zariadení: desktop 1:1 s predelom 16:9 + iPhone 15
+  // maxWidth + margin auto → pri rozťahovaní stĺpca sa zachováva pomer strán náhľadu
+  const DevicePreviews = () => (
+    <div style={{maxWidth:920, marginInline:"auto"}}>
+      <div style={S.wfTitle}>Desktop — predel 16:9 = viditeľná časť obrazovky</div>
+      <div style={{
+        aspectRatio:"1/1", overflow:"hidden", borderRadius:10,
+        border:`1px solid ${c.border}`, marginBottom:"1rem", background:"#0c0c0f",
+        position:"relative",
+      }}>
+        <MiniWebPreview brief={brief} sections={orderedSecs} fill highlight={highlightSec} />
+        {/* Predel viditeľnej časti — kde končí 16:9 viewport */}
+        <div style={{
+          position:"absolute", left:0, right:0, top:"56.25%",
+          borderTop:"1.5px dashed #ff954099", pointerEvents:"none", zIndex:8,
+        }}>
+          <span style={{
+            position:"absolute", right:6, top:2, fontSize:"0.5rem", color:"#ff9540",
+            background:"rgba(10,6,4,0.85)", padding:"0.05rem 0.3rem", borderRadius:3,
+            fontFamily:"'JetBrains Mono',monospace", letterSpacing:"0.05em",
+          }}>16:9 — VIDITEĽNÁ ČASŤ</span>
+        </div>
+      </div>
+      <div style={S.wfTitle}>Mobil — iPhone 15</div>
+      <div style={{
+        width:250, maxWidth:"85%", margin:"0 auto", aspectRatio:"393/852",
+        borderRadius:32, border:"7px solid #1c1c1e", overflow:"hidden",
+        position:"relative", background:"#000",
+        boxShadow:"0 16px 48px rgba(0,0,0,0.5)",
+        display:"flex", flexDirection:"column",
+      }}>
+        {/* Stavový riadok iPhone — čas, dynamic island, signál/batéria */}
+        <div style={{
+          height:26, flexShrink:0, background:"#000", position:"relative",
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:"0 14px", zIndex:9,
+        }}>
+          <span style={{fontSize:"0.55rem", color:"#fff", fontWeight:700, fontFamily:"-apple-system,system-ui,sans-serif"}}>9:41</span>
+          <div style={{
+            position:"absolute", left:"50%", transform:"translateX(-50%)",
+            width:66, height:16, borderRadius:11, background:"#1c1c1e",
+          }}/>
+          <span style={{fontSize:"0.45rem", color:"#fff", letterSpacing:"0.05em"}}>▂▄▆ ⚡ ▮▮▮</span>
+        </div>
+        {/* Stránka — až pod stavovým riadkom */}
+        <div style={{flex:1, minHeight:0}}>
+          <MiniWebPreview brief={brief} sections={orderedSecs} fill mobile highlight={highlightSec} />
+        </div>
+      </div>
+      <div style={{fontSize:"0.6rem",color:c.desc,marginTop:"0.6rem",lineHeight:1.4,textAlign:"center"}}>
+        {T("previewNote")}
+      </div>
     </div>
   );
 
@@ -1929,13 +2646,54 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           </div>
         </div>
       </>)}
+      {rightMode==="template" && (()=>{
+        // Šablóna — základné údaje projektu + živý vizuál stránky (aktualizuje sa s každou zmenou briefu)
+        const wt  = WEB_TYPES.find(w=>w.id===brief.webType);
+        const ind = INDUSTRIES.find(i=>i.id===brief.industry);
+        const sub = ind?.subs?.find(s=>s.id===brief.industrySubcat);
+        const addr = (brief.addresses||[])[0];
+        const Row = ({l,v}) => v ? (
+          <div style={{display:"flex",gap:"0.5rem",fontSize:"0.68rem",marginBottom:"0.3rem"}}>
+            <span style={{color:c.muted,minWidth:70,flexShrink:0}}>{l}</span>
+            <span style={{color:c.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis"}}>{v}</span>
+          </div>
+        ) : null;
+        return (
+          <div>
+            <div style={S.wfTitle}>Šablóna projektu — základné údaje</div>
+            <div style={{background:c.card,border:`1px solid ${c.border}`,borderRadius:10,padding:"0.75rem",marginBottom:"0.875rem"}}>
+              <div style={{fontFamily:"'Syne','Space Grotesk',sans-serif",fontWeight:800,fontSize:"0.95rem",color:c.text,marginBottom:"0.5rem"}}>
+                {brief.projectName||"Bez názvu"}
+              </div>
+              <Row l="Typ webu"  v={wt?`${wt.icon} ${wt.label}`:null}/>
+              <Row l="Odvetvie"  v={ind?`${ind.icon} ${ind.label}${sub?` — ${sub.label}`:""}`:null}/>
+              <Row l="Firma"     v={brief.companyName}/>
+              <Row l="IČO"       v={brief.ico}/>
+              <Row l="Telefón"   v={brief.phone}/>
+              <Row l="Email"     v={brief.email}/>
+              <Row l="Web"       v={brief.web}/>
+              <Row l="Adresa"    v={addr&&(addr.street||addr.city)?[addr.street,addr.city].filter(Boolean).join(", "):null}/>
+              <Row l="Cieľ"      v={brief.goal}/>
+              <Row l="Sekcie"    v={String((brief.sections||[]).length)}/>
+              <div style={{display:"flex",alignItems:"center",gap:"0.35rem",marginTop:"0.5rem"}}>
+                {["bg","surface","primary","accent","text"].map(k=>(
+                  <div key={k} title={`${k}: ${br[k]}`} style={{width:18,height:18,borderRadius:5,background:br[k],border:`1px solid ${c.border}`,flexShrink:0}}/>
+                ))}
+                <span style={{fontSize:"0.62rem",color:c.muted,marginLeft:"0.3rem"}}>{brief.preset||"Custom"}</span>
+              </div>
+              <div style={{fontSize:"0.62rem",color:c.muted,marginTop:"0.3rem"}}>
+                {br.fontDisplay} / {br.fontBody}
+              </div>
+            </div>
+            {DevicePreviews()}
+          </div>
+        );
+      })()}
       {rightMode==="prompt" && isAdmin && (<>
         <button style={S.copyBtn} onClick={copyOut}>{copied?"✓ Skopírované":"Kopírovať prompt"}</button>
         <div style={S.codeBox}>{prompt}</div>
       </>)}
-      {rightMode==="webview" && isAdmin && (
-        <MiniWebPreview brief={brief} sections={orderedSecs} note={T("previewNote")} />
-      )}
+      {rightMode==="webview" && isAdmin && DevicePreviews()}
       {rightMode==="code" && isAdmin && (<>
         <button style={S.copyBtn} onClick={copyOut}>{copied?"✓ Skopírované":"Kopírovať kód"}</button>
         <div style={S.codeBox}>{code}</div>
@@ -1995,6 +2753,8 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
               {id:"env",label:".env.example"},
               {id:"readme",label:"README.md"},
               {id:"cookies",label:"Cookie consent"},
+              {id:"gdprdoc",label:"Súhlas — os. údaje"},
+              {id:"cookiesdoc",label:"Cookies policy"},
               {id:"favicon",label:"Favicon checklist"},
               {id:"prelaunch",label:"Pre-launch"},
               {id:"humans",label:"humans.txt"},
@@ -2146,6 +2906,35 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             </>
           )}
 
+          {/* SÚHLAS SO SPRACOVANÍM OSOBNÝCH ÚDAJOV */}
+          {toolsTab==="gdprdoc" && (
+            <>
+              <div style={S.wfTitle}>Súhlas so spracovaním osobných údajov</div>
+              <div style={{fontSize:"0.62rem",color:c.desc,lineHeight:1.45,marginBottom:"0.75rem"}}>
+                Podmienky ochrany súkromia formou súhlasu (vzor interez.sk). Firemné údaje sa automaticky
+                dopĺňajú zo Základných údajov, účely spracovania podľa typu webu a integrácií.
+                Chýbajúce údaje sú označené [DOPLNIŤ]. Vlož do footeru ako „Ochrana osobných údajov".
+                Pred nasadením odporúčame právnu kontrolu.
+              </div>
+              <button style={S.copyBtn} onClick={copyOut}>{copied?"✓ Skopírované":"Kopírovať dokument"}</button>
+              <div style={S.codeBox}>{privacyPolicyDoc}</div>
+            </>
+          )}
+
+          {/* COOKIES POLICY */}
+          {toolsTab==="cookiesdoc" && (
+            <>
+              <div style={S.wfTitle}>Pravidlá používania súborov cookies</div>
+              <div style={{fontSize:"0.62rem",color:c.desc,lineHeight:1.45,marginBottom:"0.75rem"}}>
+                Cookies policy (vzor interez.sk). Tretie strany sa dopĺňajú podľa vybraných integrácií,
+                firemné údaje zo Základných údajov. Vlož do footeru ako „Cookies".
+                Pred nasadením odporúčame právnu kontrolu.
+              </div>
+              <button style={S.copyBtn} onClick={copyOut}>{copied?"✓ Skopírované":"Kopírovať dokument"}</button>
+              <div style={S.codeBox}>{cookiesPolicyDoc}</div>
+            </>
+          )}
+
           {/* FAVICON CHECKLIST */}
           {toolsTab==="favicon" && (
             <>
@@ -2265,7 +3054,44 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
       <div style={S.header}>
         <span style={S.logo}>{isAdmin ? "⚡ WebQuote Admin" : "⚡ "+(brief.projectName||"Nový projekt")}</span>
         {isAdmin && <span style={S.adminBadge}>ADMIN</span>}
+        {/* Powered by MediaVolt — hore vedľa loga */}
+        {!isMobile && (
+          <a href="https://mediavolt.org" target="_blank" rel="noopener noreferrer"
+            style={{
+              display:"inline-flex", alignItems:"center", gap:"0.3rem",
+              fontSize:"0.58rem", fontFamily:"'JetBrains Mono',monospace",
+              letterSpacing:"0.07em", color:c.muted, textDecoration:"none",
+              border:`1px solid ${c.border}`, borderRadius:20, padding:"0.18rem 0.55rem",
+              whiteSpace:"nowrap",
+            }}
+            onMouseEnter={e=>{e.currentTarget.style.color=c.pri; e.currentTarget.style.borderColor=c.pri;}}
+            onMouseLeave={e=>{e.currentTarget.style.color=c.muted; e.currentTarget.style.borderColor=c.border;}}
+          >
+            <span style={{color:c.pri}}>⬡</span> powered by MediaVolt
+          </a>
+        )}
         <div style={S.hRight}>
+          {/* Stav uloženia + manuálne uloženie */}
+          {hasSupabase && (()=>{
+            const cfg = {
+              saving: { txt:"● Ukladám…",  col:"#ffb020" },
+              saved:  { txt:"✓ Uložené",   col:"#22c55e" },
+              error:  { txt:"✕ Chyba — ulož znova", col:"#f87171" },
+              idle:   { txt:"💾 Uložiť",   col:c.muted },
+            }[saveState||"idle"] || { txt:"💾 Uložiť", col:c.muted };
+            return (
+              <button onClick={onSaveNow} title="Uložiť zmeny ručne (autosave beží automaticky)"
+                style={{
+                  background:"transparent", border:`1px solid ${cfg.col}50`,
+                  color:cfg.col, borderRadius:7, padding:"0.25rem 0.6rem",
+                  fontSize:"0.65rem", fontWeight:700, cursor:"pointer", minHeight:"unset",
+                  whiteSpace:"nowrap", fontFamily:"'JetBrains Mono',monospace", letterSpacing:"0.04em",
+                  transition:"all .2s",
+                }}>
+                {cfg.txt}
+              </button>
+            );
+          })()}
           {/* Jazyk UI (SK/EN/CS/DE) — synchronizuje sa cez brief */}
           <select value={lang} onChange={e=>update({lang:e.target.value})} title={T("language")}
             style={{
@@ -2287,7 +3113,6 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             {simple ? "✨ "+T("simpleMode") : "⚙️ "+T("expertMode")}
           </button>
           <div style={S.live}><div style={S.liveDot}/>Live</div>
-          <ThemeToggle theme={theme} setTheme={setTheme}/>
           {!isMobile && <span style={S.badge}>#{sessionId}</span>}
         </div>
       </div>
@@ -2342,14 +3167,17 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
               )}
             </>
           ) : (
-            <>
+            /* Zbalený rail — klik kdekoľvek (aj mimo tlačidla) rozbalí menu */
+            <div onClick={()=>setLeftOpen(true)} title="Klikni pre rozbalenie menu"
+              style={{display:"flex",flexDirection:"column",height:"100%",cursor:"pointer"}}>
               {/* RAIL — ikony kategórií */}
               <div style={S.rail}>
                 {ACCORDION.map(acc=>{
                   const isActive=openAcc[acc.id] || activeSub.startsWith(acc.id);
                   return (
                     <button key={acc.id} style={S.railBtn(isActive)} title={acc.label}
-                      onClick={()=>{
+                      onClick={(e)=>{
+                        e.stopPropagation();
                         setLeftOpen(true);
                         setOpenAcc(p=>({...p,[acc.id]:true}));
                         const first=acc.subs[0];
@@ -2363,7 +3191,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
               <div style={S.railToggle}>
                 <button style={S.railToggleBtn} onClick={()=>setLeftOpen(true)} title="Rozbaliť">▶</button>
               </div>
-            </>
+            </div>
           )}
         </div>
         )}
@@ -2590,8 +3418,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             {/* ── Adaptívny výber podľa odvetvia (napr. oblasti práva) ── */}
             {brief.industry && (()=>{
               const ex = getIndustryExtras(brief.industry, brief.industrySubcat);
-              const preset = INDUSTRY_SECTION_PRESETS[brief.industry];
-              if (!ex && !preset) return null;
+              if (!ex) return null;
               const selected = brief.industryExtras || [];
               return (
                 <>
@@ -2617,19 +3444,6 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                           );
                         })}
                       </div>
-                    </div>
-                  )}
-                  {preset && (
-                    <div style={{marginTop:"0.75rem", display:"flex", alignItems:"center", gap:"0.5rem", flexWrap:"wrap"}}>
-                      <span style={{fontSize:"0.62rem", color:c.muted}}>{T("recommended")}:</span>
-                      <button onClick={()=>update({sections:[...preset]})}
-                        style={{
-                          padding:"0.3rem 0.7rem", borderRadius:7, cursor:"pointer", minHeight:"unset",
-                          fontSize:"0.65rem", fontWeight:700,
-                          border:`1.5px solid ${c.pri}`, background:`${c.pri}14`, color:c.pri,
-                        }}>
-                        {JSON.stringify(brief.sections)===JSON.stringify(preset) ? T("applied") : `${T("useRecommended")} (${preset.length})`}
-                      </button>
                     </div>
                   )}
                 </>
@@ -2732,6 +3546,172 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                 </div>
               </div>
             ))}
+
+            {/* Mapy — Google Maps / Bing Maps place */}
+            {[
+              { key:"gmaps", label:"Google Maps place", icon:"📍", urlKey:"gmapsUrl", statusKey:"gmapsStatus", ph:"https://maps.app.goo.gl/… alebo link na firemný profil" },
+              { key:"bing",  label:"Bing Maps place",   icon:"🧭", urlKey:"bingUrl",  statusKey:"bingStatus",  ph:"https://www.bing.com/maps?…" },
+            ].map(m=>(
+              <div key={m.key} style={{marginTop:"0.6rem"}}>
+                <label style={S.lbl}>{m.icon} {m.label}</label>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.4rem"}}>
+                  {[
+                    { id:"have", label:`Mám ${m.label}`,        icon:"✅" },
+                    { id:"need", label:`Potrebujem ${m.label}`, icon:"🆕" },
+                  ].map(opt=>{
+                    const sel = brief[m.statusKey]===opt.id;
+                    return (
+                      <button key={opt.id} onClick={()=>update({[m.statusKey]: sel ? "" : opt.id})} style={{
+                        padding:"0.45rem 0.55rem",borderRadius:8,cursor:"pointer",minHeight:"unset",
+                        border:`1.5px solid ${sel?c.pri:c.border}`,
+                        background:sel?c.cardActive:c.inpBg,
+                        display:"flex",alignItems:"center",gap:"0.4rem",textAlign:"left",
+                      }}>
+                        <span style={{fontSize:"0.85rem"}}>{opt.icon}</span>
+                        <span style={{fontSize:"0.7rem",fontWeight:sel?600:400,color:sel?c.pri:c.text}}>{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {brief[m.statusKey]==="have" && (
+                  <input
+                    style={{...S.inp,marginTop:"0.4rem"}}
+                    placeholder={m.ph}
+                    value={brief[m.urlKey]||""}
+                    onChange={e=>update({[m.urlKey]:e.target.value})}
+                  />
+                )}
+                {brief[m.statusKey]==="need" && (
+                  <div style={{fontSize:"0.62rem",color:c.desc,marginTop:"0.3rem",lineHeight:1.4}}>
+                    Založenie {m.label} zaradíme do zadania — vytvorí sa z firemných údajov a adresy vyššie.
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* ── OTVÁRACIE HODINY / PRACOVNÁ DOBA ── */}
+          <div id="blk-info-hours" style={BLK("info-hours")}>
+            <div style={S.secTitle}>Otváracie hodiny / Pracovná doba<div style={S.divider}/></div>
+            <div style={{fontSize:"0.62rem",color:c.desc,lineHeight:1.4,marginBottom:"0.6rem"}}>
+              Zaklikni dni a nastav časy — premietne sa do sekcie Otváracie hodiny, promptu aj štruktúrovaných dát (SEO).
+            </div>
+            {(()=>{
+              const oh = brief.openingHours || defaultOpeningHours();
+              const setDay = (dayId, patch) => update({
+                openingHours: { ...oh, days: { ...oh.days, [dayId]: { ...(oh.days?.[dayId]||{}), ...patch } } },
+              });
+              const timeInp = (val, onCh) => (
+                <input type="time" value={val||""} onChange={e=>onCh(e.target.value)} style={{
+                  background:c.bg, border:`1px solid ${c.border}`, borderRadius:5,
+                  color:c.text, fontSize:"0.68rem", padding:"0.15rem 0.3rem", outline:"none",
+                  colorScheme:"dark",
+                }}/>
+              );
+              return (
+                <>
+                  {OH_DAYS.map(d=>{
+                    const day = oh.days?.[d.id] || { open:false };
+                    return (
+                      <div key={d.id} style={{
+                        display:"flex", alignItems:"center", gap:"0.5rem", flexWrap:"wrap",
+                        padding:"0.35rem 0.5rem", borderRadius:7, marginBottom:"0.25rem",
+                        background: day.open ? c.cardActive : c.inpBg,
+                        border:`1px solid ${day.open?c.pri+"50":c.border}`,
+                      }}>
+                        {/* Deň — zaklikávateľný */}
+                        <button onClick={()=>setDay(d.id,{open:!day.open})} style={{
+                          display:"flex",alignItems:"center",gap:"0.35rem",
+                          background:"transparent",border:"none",cursor:"pointer",minHeight:"unset",
+                          padding:0, width:96, flexShrink:0, textAlign:"left",
+                        }}>
+                          <span style={{
+                            width:14,height:14,borderRadius:3,flexShrink:0,
+                            border:`2px solid ${day.open?c.pri:c.border}`,
+                            background:day.open?c.pri:"transparent",
+                            display:"inline-flex",alignItems:"center",justifyContent:"center",
+                            fontSize:"0.5rem",color:"#fff",
+                          }}>{day.open?"✓":""}</span>
+                          <span style={{fontSize:"0.72rem",fontWeight:day.open?600:400,color:day.open?c.text:c.muted}}>{d.label}</span>
+                        </button>
+                        {day.open ? (
+                          <>
+                            {timeInp(day.from, v=>setDay(d.id,{from:v}))}
+                            <span style={{color:c.muted,fontSize:"0.68rem"}}>–</span>
+                            {timeInp(day.to, v=>setDay(d.id,{to:v}))}
+                            {/* Prestávka */}
+                            <button onClick={()=>setDay(d.id,{brk:!day.brk})} style={{
+                              display:"flex",alignItems:"center",gap:"0.3rem",
+                              background:"transparent",border:"none",cursor:"pointer",minHeight:"unset",padding:0,
+                            }}>
+                              <span style={{
+                                width:12,height:12,borderRadius:3,flexShrink:0,
+                                border:`2px solid ${day.brk?c.pri:c.border}`,
+                                background:day.brk?c.pri:"transparent",
+                                display:"inline-flex",alignItems:"center",justifyContent:"center",
+                                fontSize:"0.45rem",color:"#fff",
+                              }}>{day.brk?"✓":""}</span>
+                              <span style={{fontSize:"0.64rem",color:day.brk?c.text:c.muted}}>prestávka</span>
+                            </button>
+                            {day.brk && (
+                              <>
+                                {timeInp(day.brkFrom, v=>setDay(d.id,{brkFrom:v}))}
+                                <span style={{color:c.muted,fontSize:"0.68rem"}}>–</span>
+                                {timeInp(day.brkTo, v=>setDay(d.id,{brkTo:v}))}
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <span style={{fontSize:"0.66rem",color:c.muted}}>Zatvorené</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {/* Sviatky */}
+                  <button onClick={()=>update({openingHours:{...oh, holidaysOpen:!oh.holidaysOpen}})} style={{
+                    display:"flex",alignItems:"center",gap:"0.45rem",marginTop:"0.4rem",
+                    padding:"0.45rem 0.6rem",borderRadius:7,cursor:"pointer",minHeight:"unset",textAlign:"left",
+                    border:`1.5px solid ${oh.holidaysOpen?c.pri:c.border}`,
+                    background:oh.holidaysOpen?c.cardActive:c.inpBg, width:"100%",
+                  }}>
+                    <span style={{
+                      width:14,height:14,borderRadius:3,flexShrink:0,
+                      border:`2px solid ${oh.holidaysOpen?c.pri:c.border}`,
+                      background:oh.holidaysOpen?c.pri:"transparent",
+                      display:"inline-flex",alignItems:"center",justifyContent:"center",
+                      fontSize:"0.5rem",color:"#fff",
+                    }}>{oh.holidaysOpen?"✓":""}</span>
+                    <span style={{fontSize:"0.72rem",color:oh.holidaysOpen?c.pri:c.text,fontWeight:oh.holidaysOpen?600:400}}>
+                      🎉 Otvorené počas sviatkov a dní pracovného pokoja
+                    </span>
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+
+          {/* ── SOCIÁLNE SIETE — linky na profily ── */}
+          <div id="blk-info-socials" style={BLK("info-socials")}>
+            <div style={S.secTitle}>Sociálne siete<div style={S.divider}/></div>
+            <div style={{fontSize:"0.62rem",color:c.desc,lineHeight:1.4,marginBottom:"0.6rem"}}>
+              Vlož linky na profily — použijú sa v navigácii, footri a kontakte webu. Nevyplnené siete sa na webe nezobrazia.
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem"}}>
+              {SOCIAL_NETWORKS.map(sn=>{
+                const val=(brief.socials||{})[sn.id]||"";
+                return (
+                  <div key={sn.id}>
+                    <label style={S.lbl}>{sn.icon} {sn.label}</label>
+                    <input
+                      style={{...S.inp, borderColor: val ? c.pri : c.border}}
+                      placeholder={sn.ph}
+                      value={val}
+                      onChange={e=>update({ socials:{ ...(brief.socials||{}), [sn.id]:e.target.value } })}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* ── DETAILY PROJEKTU — technické požiadavky ── */}
@@ -2928,33 +3908,6 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
               )}
             </div>
 
-            {/* Integrácie */}
-            <div style={{marginBottom:"0.5rem"}}>
-              <label style={S.lbl}>Integrácie a nástroje</label>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.35rem"}}>
-                {INTEGRATION_OPTIONS.map(opt=>{
-                  const sel=(brief.techIntegrations||[]).includes(opt.id);
-                  return (
-                    <button key={opt.id}
-                      onClick={()=>update({techIntegrations: sel ? brief.techIntegrations.filter(x=>x!==opt.id) : [...(brief.techIntegrations||[]),opt.id]})}
-                      style={{
-                        display:"flex",alignItems:"center",gap:"0.45rem",
-                        padding:"0.4rem 0.55rem",borderRadius:7,cursor:"pointer",minHeight:"unset",textAlign:"left",
-                        border:`1.5px solid ${sel?c.pri:c.border}`,
-                        background:sel?c.cardActive:c.inpBg,
-                      }}>
-                      <div style={{
-                        width:14,height:14,borderRadius:3,flexShrink:0,
-                        border:`2px solid ${sel?c.pri:c.border}`,background:sel?c.pri:"transparent",
-                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.5rem",color:"#fff",
-                      }}>{sel?"✓":""}</div>
-                      <span style={{fontSize:"0.7rem",color:sel?c.pri:c.text,fontWeight:sel?600:400}}>{opt.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* Poznámka */}
             <div style={S.fRow}>
               <label style={S.lbl}>Ďalšie technické poznámky <span style={{fontWeight:400,textTransform:"none"}}>(voliteľné)</span></label>
@@ -3102,6 +4055,40 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
           {/* ── BRAND PRESET ── */}
           <div id="blk-brand-preset" style={BLK("brand-preset")}>
             <div style={S.secTitle}>Brand — presety<div style={S.divider}/></div>
+
+            {/* Farba prvkov — vždy viditeľná; výber rovno otvorí odporúčané presety */}
+            <div style={{fontSize:"0.62rem",fontWeight:600,color:c.muted,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:"0.4rem"}}>
+              Farba prvkov — vyber odtieň
+            </div>
+            <div style={{display:"flex",gap:"0.4rem",flexWrap:"wrap",marginBottom:"0.6rem",alignItems:"center"}}>
+              {HUE_OPTIONS.map(h=>{
+                const sel = presetHue===h.id;
+                return (
+                  <button key={h.id} title={h.label}
+                    onClick={()=>{
+                      const next = sel ? null : h.id;
+                      setPresetHue(next);
+                      setPresetShowAll(false);
+                      setPresetOtherOpen(false);
+                      if (next) setPresetOpen(true); // rovno otvor odporúčané presety
+                    }}
+                    style={{
+                      width:28,height:28,borderRadius:"50%",cursor:"pointer",padding:0,minHeight:"unset",
+                      background:h.color,
+                      border:sel?`3px solid ${c.text}`:`2px solid ${c.border}`,
+                      boxShadow:sel?`0 0 0 3px ${h.color}50`:"none",
+                      transform:sel?"scale(1.12)":"none", transition:"all .15s",
+                    }}
+                  />
+                );
+              })}
+              {presetHue && (
+                <span style={{fontSize:"0.66rem",color:c.pri,fontWeight:700}}>
+                  {HUE_OPTIONS.find(h=>h.id===presetHue)?.label}
+                </span>
+              )}
+            </div>
+
             {/* Rozbaľovacia hlavička */}
             <button onClick={()=>setPresetOpen(o=>!o)} style={{
               width:"100%", display:"flex", alignItems:"center", gap:"0.625rem",
@@ -3124,10 +4111,9 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
               </span>
             </button>
 
-            {/* Rozbalený zoznam */}
-            {presetOpen && (
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem",marginTop:"0.5rem"}}>
-              {THEME_PRESETS.map(t=>{
+            {/* Rozbalený obsah — najprv výber farby prvkov, potom presety */}
+            {presetOpen && (()=>{
+              const renderPresetCard = (t)=>{
                 const darkName=`${t.label} Dark`, lightName=`${t.label} Light`;
                 const activeVariant = brief.preset===darkName ? "dark" : brief.preset===lightName ? "light" : null;
                 return (
@@ -3159,9 +4145,44 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                     </div>
                   </div>
                 );
-              })}
-            </div>
-            )}
+              };
+              const matched = presetHue ? THEME_PRESETS.filter(t=>PRESET_HUES[t.id]===presetHue) : THEME_PRESETS;
+              const others  = presetHue ? THEME_PRESETS.filter(t=>PRESET_HUES[t.id]!==presetHue) : [];
+              const shown   = presetShowAll ? matched : matched.slice(0,6);
+              return (
+                <div style={{marginTop:"0.5rem"}}>
+                  {/* Presety vo vybranej farbe (návrh 6, potom ďalšie) */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem"}}>
+                    {shown.map(renderPresetCard)}
+                  </div>
+                  {matched.length>6 && !presetShowAll && (
+                    <button onClick={()=>setPresetShowAll(true)} style={{
+                      width:"100%",marginTop:"0.5rem",padding:"0.45rem",borderRadius:7,cursor:"pointer",
+                      border:`1px dashed ${c.pri}70`,background:"transparent",color:c.pri,
+                      fontSize:"0.7rem",fontWeight:700,minHeight:"unset",
+                    }}>Zobraziť ďalšie ({matched.length-6})</button>
+                  )}
+
+                  {/* 3 · Presety v inej palete */}
+                  {presetHue && others.length>0 && (
+                    <>
+                      <button onClick={()=>setPresetOtherOpen(o=>!o)} style={{
+                        width:"100%",marginTop:"0.5rem",padding:"0.45rem",borderRadius:7,cursor:"pointer",
+                        border:`1px solid ${c.border}`,background:c.inpBg,color:c.muted,
+                        fontSize:"0.7rem",fontWeight:600,minHeight:"unset",
+                      }}>
+                        {presetOtherOpen?"▴ Skryť presety v inej palete":`▾ Zobraziť presety v inej palete (${others.length})`}
+                      </button>
+                      {presetOtherOpen && (
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem",marginTop:"0.5rem"}}>
+                          {others.map(renderPresetCard)}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div id="blk-brand-colors" style={BLK("brand-colors")}>
@@ -3352,9 +4373,9 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             )}
           </div>
 
-          {/* ── NAVIGÁCIA & TÉMA ── */}
+          {/* ── TÉMA ── */}
           <div id="blk-brief-nav" style={BLK("brief-nav")}>
-            <div style={S.secTitle}>Navigácia & Téma<div style={S.divider}/></div>
+            <div style={S.secTitle}>Téma<div style={S.divider}/></div>
 
             {/* Farebná téma */}
             <div style={S.fRow}>
@@ -3418,7 +4439,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
               <label style={S.lbl}>Prepínač témy pre návštevníka</label>
               <div style={{display:"flex",gap:"0.5rem"}}>
                 {[
-                  { id:"yes",  label:"Áno — daj prepínač", icon:"🔄",
+                  { id:"yes",  label:"Áno — daj prepínač", rec:true, icon:"🔄",
                     desc:"Čo je responzívne prepínanie témy? Je to tlačidlo (☀️/🌙) v navigácii ktoré návštevníkovi umožní prepnúť web medzi svetlým a tmavým režimom podľa vlastnej preferencie. Výber sa uloží do prehliadača — pri ďalšej návšteve sa pamätá. Vhodné keď chceš osloviť širšie publikum bez toho aby si sa musel rozhodnúť len pre jednu tému." },
                   { id:"no",   label:"Nie — fixná téma",   icon:"🔒",
                     desc:"Web má vždy rovnakú tému bez možnosti prepnutia. Jednoduchšie, konzistentné, vhodné keď má brand jasne danú jednu farebnú identitu." },
@@ -3437,7 +4458,10 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                           display:"flex", alignItems:"center", gap:"0.4rem",
                         }}>
                         <span style={{fontSize:"1rem",flexShrink:0}}>{opt.icon}</span>
-                        <span style={{flex:1,fontSize:"0.72rem",fontWeight:sel?700:500,color:sel?c.pri:c.text,textAlign:"left"}}>{opt.label}</span>
+                        <span style={{flex:1,fontSize:"0.72rem",fontWeight:sel?700:500,color:sel?c.pri:c.text,textAlign:"left"}}>
+                          {opt.label}
+                          {opt.rec && <span style={{color:c.muted,fontWeight:400}}> (odporúčané)</span>}
+                        </span>
                         <span
                           onMouseEnter={()=>setInfoPopup("toggle-"+opt.id)}
                           onMouseLeave={()=>setInfoPopup(null)}
@@ -3604,6 +4628,33 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             })()}
           </div>
 
+          {/* ── INTEGRÁCIE A NÁSTROJE — zobrazuje sa na konci Obsahu webu (flex order) ── */}
+          <div id="blk-content-integrations" style={BLK("content-integrations")}>
+            <div style={S.secTitle}>Integrácie a nástroje<div style={S.divider}/></div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.35rem"}}>
+              {INTEGRATION_OPTIONS.map(opt=>{
+                const sel=(brief.techIntegrations||[]).includes(opt.id);
+                return (
+                  <button key={opt.id}
+                    onClick={()=>update({techIntegrations: sel ? brief.techIntegrations.filter(x=>x!==opt.id) : [...(brief.techIntegrations||[]),opt.id]})}
+                    style={{
+                      display:"flex",alignItems:"center",gap:"0.45rem",
+                      padding:"0.4rem 0.55rem",borderRadius:7,cursor:"pointer",minHeight:"unset",textAlign:"left",
+                      border:`1.5px solid ${sel?c.pri:c.border}`,
+                      background:sel?c.cardActive:c.inpBg,
+                    }}>
+                    <div style={{
+                      width:14,height:14,borderRadius:3,flexShrink:0,
+                      border:`2px solid ${sel?c.pri:c.border}`,background:sel?c.pri:"transparent",
+                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.5rem",color:"#fff",
+                    }}>{sel?"✓":""}</div>
+                    <span style={{fontSize:"0.7rem",color:sel?c.pri:c.text,fontWeight:sel?600:400}}>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* ── OBSAH — riadky s rozbaľovacím detailom ── */}
           {CATS.map(cat=>{
             const allCatSecs=SECTIONS.filter(s=>s.cat===cat.id);
@@ -3612,8 +4663,15 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
               .map(id=>allCatSecs.find(s=>s.id===id))
               .filter(Boolean);
             const inactive=allCatSecs.filter(s=>!brief.sections.includes(s.id));
-            const catSecs=[...activeOrdered, ...inactive];
+            const catSecsAll=[...activeOrdered, ...inactive];
             const n=activeOrdered.length;
+
+            // Odporúčané sekcie podľa vybraného odvetvia — ostatné za rozkliknutím
+            const industryPreset = getRecommendedSections(brief.industry, brief.industrySubcat);
+            const isRecommendedSec = (id) => !industryPreset || industryPreset.includes(id) || brief.sections.includes(id);
+            const recSecs   = catSecsAll.filter(s=>isRecommendedSec(s.id));
+            const otherSecs = catSecsAll.filter(s=>!isRecommendedSec(s.id));
+            const catSecs   = [...recSecs, ...(othersOpen[cat.id] ? otherSecs : [])];
 
             const moveSection=(id,dir)=>{
               // presúva len v rámci aktívnych sekcií tej istej kategórie
@@ -3638,6 +4696,59 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                   <span style={{background:`${c.pri}20`,color:c.pri,padding:"0.1rem 0.45rem",borderRadius:20,fontSize:"0.62rem",fontWeight:700}}>{n}/{allCatSecs.length}</span>
                   <div style={S.divider}/>
                 </div>
+
+                {/* Odporúčaná štruktúra pre vybrané odvetvie — ako prvé v Štruktúre webu */}
+                {cat.id==="core" && industryPreset && (
+                  <div style={{
+                    display:"flex", alignItems:"center", gap:"0.5rem", flexWrap:"wrap",
+                    marginBottom:"0.5rem", padding:"0.5rem 0.625rem",
+                    background:`${c.pri}0d`, border:`1px dashed ${c.pri}60`, borderRadius:8,
+                  }}>
+                    <span style={{fontSize:"0.64rem", color:c.muted, flex:1, minWidth:140}}>💡 {T("recommended")}:</span>
+                    <button onClick={()=>update({sections:[...industryPreset]})}
+                      style={{
+                        padding:"0.3rem 0.7rem", borderRadius:7, cursor:"pointer", minHeight:"unset",
+                        fontSize:"0.65rem", fontWeight:700,
+                        border:`1.5px solid ${c.pri}`, background:`${c.pri}14`, color:c.pri,
+                      }}>
+                      {JSON.stringify(brief.sections)===JSON.stringify(industryPreset) ? T("applied") : `${T("useRecommended")} (${industryPreset.length})`}
+                    </button>
+                  </div>
+                )}
+
+                {/* Zoradenie podľa bežného odporúčaného poradia — len raz, pri prvej kategórii */}
+                {cat.id==="core" && (
+                  <div style={{display:"flex",gap:"0.4rem",alignItems:"center",marginBottom:"0.6rem",flexWrap:"wrap"}}>
+                    <button onClick={()=>update({sections:sortByRecommended(brief.sections)})} style={{
+                      display:"flex",alignItems:"center",gap:"0.3rem",
+                      padding:"0.35rem 0.7rem",borderRadius:7,cursor:"pointer",minHeight:"unset",
+                      border:`1px solid ${c.pri}`,background:`${c.pri}14`,color:c.pri,
+                      fontSize:"0.68rem",fontWeight:700,
+                    }}>⇅ Zoradiť odporúčané poradie</button>
+                    <button onClick={()=>{
+                      const on = brief.sectionsAutoOrder!==false;
+                      update(on
+                        ? { sectionsAutoOrder:false }
+                        : { sectionsAutoOrder:true, sections:sortByRecommended(brief.sections) });
+                    }} style={{
+                      display:"flex",alignItems:"center",gap:"0.4rem",
+                      padding:"0.35rem 0.7rem",borderRadius:7,cursor:"pointer",minHeight:"unset",
+                      border:`1.5px solid ${brief.sectionsAutoOrder!==false?c.pri:c.border}`,
+                      background:brief.sectionsAutoOrder!==false?c.cardActive:c.inpBg,
+                    }}>
+                      <span style={{
+                        width:13,height:13,borderRadius:3,flexShrink:0,
+                        border:`2px solid ${brief.sectionsAutoOrder!==false?c.pri:c.border}`,
+                        background:brief.sectionsAutoOrder!==false?c.pri:"transparent",
+                        display:"inline-flex",alignItems:"center",justifyContent:"center",
+                        fontSize:"0.5rem",color:"#fff",
+                      }}>{brief.sectionsAutoOrder!==false?"✓":""}</span>
+                      <span style={{fontSize:"0.66rem",color:brief.sectionsAutoOrder!==false?c.pri:c.muted,fontWeight:600}}>
+                        Auto-zoradenie pri pridávaní
+                      </span>
+                    </button>
+                  </div>
+                )}
                 {cat.id!=="core" && n>=2 && (
                   <div style={{fontSize:"0.62rem",color:c.muted,marginBottom:"0.5rem",display:"flex",alignItems:"center",gap:"0.35rem"}}>
                     <span>⠿</span> Potiahni alebo použi šípky ▲▼ na zmenu poradia sekcií
@@ -3678,6 +4789,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:"0.78rem",fontWeight:active?600:400,color:active?c.text:c.muted}}>
                             {s.label}
+                            {LOCKED_SECTIONS.includes(s.id) && <span title="Vždy súčasť webu" style={{marginLeft:"0.35rem",fontSize:"0.6rem"}}>🔒</span>}
                             {note && <span style={{marginLeft:"0.4rem",fontSize:"0.6rem",color:c.pri}}>● poznámka</span>}
                           </div>
                           <div style={{fontSize:"0.62rem",color:c.desc,lineHeight:1.35,marginTop:1}}>{s.desc}</div>
@@ -3725,7 +4837,7 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                         )}
 
                         {/* Šípka na rozbalenie detailu */}
-                        <button onClick={()=>setExpSec(open?null:s.id)} style={{
+                        <button onClick={()=>{ setExpSec(open?null:s.id); if(!open) setHighlightSec(s.id); }} style={{
                           background:c.bg,border:`1.5px solid ${c.pri}`,
                           borderRadius:7,padding:"0.35rem 0.6rem",cursor:"pointer",
                           fontSize:"0.7rem",color:c.pri,lineHeight:1,fontWeight:700,
@@ -3829,9 +4941,22 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                                   width:"100%",boxSizing:"border-box",background:c.bg,
                                   border:`1px solid ${c.border}`,borderRadius:6,
                                   padding:"0.5rem 0.625rem",color:c.text,fontSize:"0.75rem",
-                                  outline:"none",marginBottom:"0.75rem",
+                                  outline:"none",marginBottom:seoSuggestion&&!brief.heroSeo?"0.3rem":"0.75rem",
                                 }}
                               />
+                              {/* Návrh SEO nadpisu podľa vybraného odvetvia */}
+                              {seoSuggestion && !brief.heroSeo && (
+                                <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"0.75rem"}}>
+                                  <span style={{fontSize:"0.64rem",color:c.desc,flex:1,lineHeight:1.4}}>
+                                    💡 Návrh podľa odvetvia: „{seoSuggestion}"
+                                  </span>
+                                  <button onClick={()=>update({heroSeo:seoSuggestion})} style={{
+                                    background:`${c.pri}18`, border:`1px solid ${c.pri}`, color:c.pri,
+                                    borderRadius:6, padding:"0.2rem 0.6rem", cursor:"pointer",
+                                    fontSize:"0.64rem", fontWeight:700, minHeight:"unset", whiteSpace:"nowrap",
+                                  }}>Použiť</button>
+                                </div>
+                              )}
 
                               {/* CTA buttony odkazujúce na sekcie */}
                               <div style={{fontSize:"0.62rem",fontWeight:600,color:c.muted,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:"0.4rem"}}>CTA tlačidlá — odkazy na sekcie</div>
@@ -3839,9 +4964,15 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                                 Vyber sekcie na ktoré budú smerovať hero tlačidlá (scroll po kliknutí).
                               </div>
                               <div style={{display:"flex",flexWrap:"wrap",gap:"0.3rem",marginBottom:"0.75rem"}}>
-                                {brief.sections.filter(id=>id!=="hero"&&id!=="nav").map(id=>{
-                                  const sec=SECTIONS.find(x=>x.id===id);
-                                  if(!sec) return null;
+                                {[
+                                  // Fixná voľba — kontaktné CTA (nezávisí od sekcií)
+                                  { id:"contactus", icon:"📞", label:"Kontaktujte nás" },
+                                  ...brief.sections
+                                    .filter(id=>id!=="hero"&&id!=="nav")
+                                    .map(id=>SECTIONS.find(x=>x.id===id))
+                                    .filter(sec=>sec && sec.cat!=="extra"), // bez cookie banneru, scroll-to-top a pod.
+                                ].map(sec=>{
+                                  const id=sec.id;
                                   const on=(brief.heroCtas||[]).includes(id);
                                   return (
                                     <button key={id}
@@ -3858,10 +4989,40 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                                     </button>
                                   );
                                 })}
-                                {brief.sections.filter(id=>id!=="hero"&&id!=="nav").length===0 && (
-                                  <span style={{fontSize:"0.65rem",color:c.muted}}>Najprv zapni iné sekcie v zozname</span>
-                                )}
                               </div>
+
+                              {/* CTA tlačidlo v navigácii — návrhy podľa odvetvia + vlastný text */}
+                              <div style={{fontSize:"0.62rem",fontWeight:600,color:c.muted,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:"0.4rem"}}>CTA tlačidlo v navigácii</div>
+                              <div style={{fontSize:"0.6rem",color:c.desc,marginBottom:"0.4rem",lineHeight:1.4}}>
+                                Hlavné tlačidlo v menu webu. Vyber návrh podľa odvetvia alebo vpíš vlastný text.
+                              </div>
+                              <div style={{display:"flex",flexWrap:"wrap",gap:"0.3rem",marginBottom:"0.4rem"}}>
+                                {(NAV_CTA_SUGGESTIONS[brief.industry] || NAV_CTA_SUGGESTIONS._default).map(txt=>{
+                                  const on = brief.navCta===txt;
+                                  return (
+                                    <button key={txt} onClick={()=>update({navCta: on ? "" : txt})} style={{
+                                      padding:"0.25rem 0.6rem",borderRadius:20,
+                                      border:`1px solid ${on?c.pri:c.border}`,
+                                      background:on?`${c.pri}18`:c.bg,
+                                      color:on?c.pri:c.muted,cursor:"pointer",
+                                      fontSize:"0.68rem",fontWeight:on?600:400,minHeight:"unset",
+                                    }}>
+                                      {on?"✓ ":""}{txt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <input
+                                placeholder="…alebo vlastný text tlačidla (napr. Získať ponuku)"
+                                value={brief.navCta||""}
+                                onChange={e=>update({navCta:e.target.value})}
+                                style={{
+                                  width:"100%",boxSizing:"border-box",background:c.bg,
+                                  border:`1px solid ${brief.navCta?c.pri:c.border}`,borderRadius:6,
+                                  padding:"0.5rem 0.625rem",color:c.text,fontSize:"0.75rem",
+                                  outline:"none",marginBottom:"0.75rem",
+                                }}
+                              />
 
                               {/* Médium / vizuál */}
                               <div style={{fontSize:"0.62rem",fontWeight:600,color:c.muted,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:"0.4rem"}}>Vizuál hero</div>
@@ -3880,19 +5041,101 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                                   );
                                 })}
                               </div>
-                              {/* URL pre médium */}
+                              {/* Vizuálny výber slidera — živé náhľady z public/sliders */}
+                              {brief.heroMedia==="carousel" && (
+                                <div style={{marginTop:"0.625rem"}}>
+                                  <div style={{fontSize:"0.62rem",fontWeight:600,color:c.muted,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:"0.4rem"}}>
+                                    Typ slidera — vyber vizuál
+                                  </div>
+                                  <div style={{display:"grid",gridTemplateColumns:"repeat(4, minmax(0, 1fr))",gap:"0.5rem"}}>
+                                    {SLIDER_OPTIONS.map(sl=>{
+                                      const sel = brief.heroSlider===sl.id;
+                                      return (
+                                        <button key={sl.id} onClick={()=>update({heroSlider: sel ? "" : sl.id})} style={{
+                                          padding:0, borderRadius:8, overflow:"hidden", textAlign:"left",
+                                          border:`2px solid ${sel?c.pri:c.border}`,
+                                          background:sel?c.cardActive:c.bg, cursor:"pointer", minHeight:"unset",
+                                          boxShadow: sel ? `0 0 0 3px ${c.pri}30` : "none",
+                                        }}>
+                                          <div style={{position:"relative", aspectRatio:"16/9", overflow:"hidden", background:"#0c0c0f"}}>
+                                            <iframe
+                                              srcDoc={sl.html}
+                                              title={sl.label}
+                                              loading="lazy"
+                                              sandbox="allow-scripts"
+                                              style={{
+                                                width:"400%", height:"400%", border:"none",
+                                                transform:"scale(0.25)", transformOrigin:"top left",
+                                                pointerEvents:"none",
+                                              }}
+                                              tabIndex={-1}
+                                            />
+                                            {sel && (
+                                              <div style={{position:"absolute",top:5,right:5,background:c.pri,color:"#fff",
+                                                borderRadius:"50%",width:18,height:18,display:"flex",alignItems:"center",
+                                                justifyContent:"center",fontSize:"0.65rem",fontWeight:800}}>✓</div>
+                                            )}
+                                          </div>
+                                          <div style={{padding:"0.3rem 0.45rem"}}>
+                                            <div style={{fontSize:"0.64rem",fontWeight:sel?700:600,color:sel?c.pri:c.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sl.label}</div>
+                                            <div style={{fontSize:"0.55rem",color:c.desc,lineHeight:1.3}}>{sl.desc}</div>
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  <div style={{fontSize:"0.6rem",color:c.desc,marginTop:"0.35rem",lineHeight:1.4}}>
+                                    Náhľady sú živé animácie. Kliknutím vyberieš typ, opätovným kliknutím zrušíš výber.
+                                  </div>
+                                </div>
+                              )}
+                              {/* URL pre médium + upload obrázka */}
                               {(brief.heroMedia==="image"||brief.heroMedia==="video"||brief.heroMedia==="3dscene"||brief.heroMedia==="custom"||brief.heroMedia==="carousel") && (
-                                <input
-                                  placeholder={brief.heroMedia==="video"?"Link na video (YouTube / Vimeo / .mp4)":brief.heroMedia==="3dscene"?"Link na Spline / 3D scénu":brief.heroMedia==="carousel"?"Linky na obrázky carouselu (oddeľ čiarkou)":"Link na obrázok / referenčný vizuál"}
-                                  value={brief.heroMediaUrl||""}
-                                  onChange={e=>update({heroMediaUrl:e.target.value})}
-                                  style={{
-                                    width:"100%",boxSizing:"border-box",background:c.bg,
-                                    border:`1px solid ${c.border}`,borderRadius:6,
-                                    padding:"0.5rem 0.625rem",color:c.text,fontSize:"0.75rem",
-                                    outline:"none",marginTop:"0.5rem",
-                                  }}
-                                />
+                                <>
+                                  <input
+                                    placeholder={brief.heroMedia==="video"?"Link na video (YouTube / Vimeo / .mp4)":brief.heroMedia==="3dscene"?"Link na Spline / 3D scénu":brief.heroMedia==="carousel"?"Linky na obrázky carouselu (oddeľ čiarkou)":"Link na obrázok / referenčný vizuál"}
+                                    value={brief.heroMediaUrl||""}
+                                    onChange={e=>update({heroMediaUrl:e.target.value})}
+                                    style={{
+                                      width:"100%",boxSizing:"border-box",background:c.bg,
+                                      border:`1px solid ${c.border}`,borderRadius:6,
+                                      padding:"0.5rem 0.625rem",color:c.text,fontSize:"0.75rem",
+                                      outline:"none",marginTop:"0.5rem",
+                                    }}
+                                  />
+                                  {/* Alebo priamo vlož vizuál(y) — viacero naraz, auto-konverzia do WebP */}
+                                  {(brief.heroMediaUploads||[]).length>0 && (
+                                    <div style={{display:"grid",gridTemplateColumns:"repeat(4, minmax(0,1fr))",gap:"0.4rem",marginTop:"0.5rem"}}>
+                                      {(brief.heroMediaUploads||[]).map(v=>(
+                                        <div key={v.id} style={{position:"relative",borderRadius:6,overflow:"hidden",border:`1px solid ${c.border}`,background:c.bg}}>
+                                          <img src={v.data} alt="" style={{width:"100%",aspectRatio:"16/10",objectFit:"cover",display:"block"}}/>
+                                          <button onClick={()=>removeHeroVisual(v.id)} title="Odstrániť" style={{
+                                            position:"absolute",top:3,right:3,width:16,height:16,
+                                            background:"rgba(0,0,0,0.65)",border:"none",color:"#fff",
+                                            borderRadius:"50%",cursor:"pointer",fontSize:"0.55rem",minHeight:"unset",
+                                            display:"flex",alignItems:"center",justifyContent:"center",padding:0,
+                                          }}>✕</button>
+                                          <div style={{fontSize:"0.5rem",color:c.muted,padding:"0.15rem 0.3rem",
+                                            whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{v.name}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <label style={{
+                                    display:"inline-flex",alignItems:"center",gap:"0.35rem",marginTop:"0.5rem",
+                                    border:`1px dashed ${c.pri}70`,borderRadius:6,padding:"0.35rem 0.7rem",
+                                    cursor:"pointer",fontSize:"0.68rem",color:c.pri,fontWeight:600,
+                                  }}>
+                                    📷 …alebo vlož vizuál(y)
+                                    <input type="file" accept="image/*" multiple style={{display:"none"}} onChange={e=>{
+                                      addHeroVisuals(e.target.files);
+                                      e.target.value="";
+                                    }}/>
+                                  </label>
+                                  <div style={{fontSize:"0.58rem",color:c.desc,marginTop:"0.3rem"}}>
+                                    Môžeš vložiť viacero obrázkov naraz — automaticky sa konvertujú do WebP (max 1600 px).
+                                  </div>
+                                </>
                               )}
                             </div>
                           )}
@@ -3918,6 +5161,17 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
                     </div>
                   );
                 })}
+
+                {/* Ostatné (neodporúčané) sekcie pre vybrané odvetvie — za rozkliknutím */}
+                {otherSecs.length>0 && (
+                  <button onClick={()=>setOthersOpen(p=>({...p,[cat.id]:!p[cat.id]}))} style={{
+                    width:"100%", padding:"0.4rem", borderRadius:7, cursor:"pointer", minHeight:"unset",
+                    border:`1px dashed ${c.border}`, background:"transparent", color:c.muted,
+                    fontSize:"0.66rem", fontWeight:600, marginTop:"0.2rem",
+                  }}>
+                    {othersOpen[cat.id] ? "▴ Skryť ostatné sekcie" : `▾ Ostatné sekcie (${otherSecs.length})`}
+                  </button>
+                )}
               </div>
             );
           })}
@@ -3928,9 +5182,9 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
         {/* RIGHT — mobil: len keď je preview tab */}
         {(isMobile && mobilePane==="preview") && (
         <div style={S.right}>
-          <RightControlRow/>
-          <RightModeRow/>
-          <RightBody/>
+          {RightControlRow()}
+          {RightModeRow()}
+          {RightBody()}
         </div>
         )}
 
@@ -3938,9 +5192,20 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
         {!isMobile && rightSize!=="overlay" && (
           (rightOpen || rightSize!=="normal") ? (
             <div style={S.right}>
-              <RightControlRow/>
-              <RightModeRow/>
-              <RightBody/>
+              {/* Ťahateľný resizer — dynamická šírka stredného a pravého stĺpca */}
+              {rightSize==="normal" && (
+                <div onPointerDown={startRightResize} title="Potiahni pre zmenu šírky náhľadu"
+                  style={{
+                    position:"absolute", left:0, top:0, bottom:0, width:6,
+                    cursor:"col-resize", zIndex:5,
+                  }}
+                  onMouseEnter={e=>e.currentTarget.style.background=`${c.pri}40`}
+                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+                />
+              )}
+              {RightControlRow()}
+              {RightModeRow()}
+              {RightBody()}
             </div>
           ) : (
             <div style={S.rightRail}>
@@ -3970,15 +5235,15 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
             }}
           />
           <div style={{
-            position:"fixed", top:0, right:0, bottom:0,
+            position:"fixed", top:"var(--wq-admin-h, 0px)", right:0, bottom:0,
             width:"82%", maxWidth:"calc(100vw - 64px)",
             background:c.panel, borderLeft:`1.5px solid ${c.pri}`,
             boxShadow:"-8px 0 32px rgba(0,0,0,0.4)",
             zIndex:91, display:"flex", flexDirection:"column",
           }}>
-            <RightControlRow/>
-            <RightModeRow/>
-            <RightBody/>
+            {RightControlRow()}
+            {RightModeRow()}
+            {RightBody()}
           </div>
         </>
       )}
@@ -3989,3 +5254,4 @@ export function BuilderView({ sessionId, brief, update, theme, setTheme, isAdmin
 
 // ─── Named exports pre App.jsx ─────────────────────────────
 export { getRole, getSessionId, DEFAULT_BRIEF, createRealtimeChannel };
+// EOF

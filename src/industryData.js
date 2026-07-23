@@ -257,3 +257,218 @@ export const INDUSTRY_SECTION_PRESETS = {
   travel:        ["nav","hero","services","gallery","testimonials","faq","booking","map","newsletter","contact","footer","cookies","scrolltop"],
   wellness:      ["nav","hero","services","pricing","gallery","team","testimonials","booking","contact","openinghours","footer","cookies","scrolltop"],
 };
+
+// ── ODPORÚČANÉ SEKCIE PRE JEDNOTLIVÉ PODKATEGÓRIE ────────────
+// Presnejšie ako kategórie — odvodené z reálnych webov daného typu biznisu.
+// Kľúč = id podkategórie. Ak podkategória chýba, použije sa preset kategórie.
+// Doplňuje sa priebežne (task per kategória). Sekcie 404+gdpr sa dopĺňajú automaticky.
+export const INDUSTRY_SUBCAT_SECTION_PRESETS = {
+  // — AGRO & POTRAVINÁRSTVO —
+  farm:       ["nav","hero","about","products","gallery","process","reviews","map","openinghours","contact","footer","cookies","scrolltop"],
+  winery:     ["nav","hero","about","products","booking","gallery","events","reviews","map","openinghours","newsletter","contact","footer","cookies","scrolltop"],
+  brewery:    ["nav","hero","about","products","process","booking","gallery","events","map","openinghours","contact","footer","cookies","scrolltop"],
+  beekeeping: ["nav","hero","about","products","process","gallery","reviews","faq","map","contact","footer","cookies","scrolltop"],
+  farmshop:   ["nav","hero","products","about","process","reviews","faq","map","openinghours","newsletter","contact","footer","cookies","scrolltop","search"],
+
+  // — AUTOMOTIVE —
+  cardealer:  ["nav","hero","products","features","calculator","gallery","reviews","faq","leadform","contact","map","openinghours","footer","cookies","scrolltop","search"],
+  carservice: ["nav","hero","services","features","pricing","booking","reviews","team","faq","contact","map","openinghours","footer","cookies","scrolltop"],
+  carwash:    ["nav","hero","services","pricing","gallery","reviews","booking","faq","map","openinghours","contact","footer","cookies","scrolltop"],
+  carrental:  ["nav","hero","products","features","pricing","booking","faq","reviews","contact","map","openinghours","footer","cookies","scrolltop","search"],
+  tires:      ["nav","hero","services","products","pricing","booking","faq","reviews","map","openinghours","contact","footer","cookies","scrolltop"],
+  moto:       ["nav","hero","products","services","gallery","reviews","booking","faq","contact","map","openinghours","footer","cookies","scrolltop"],
+  towing:     ["nav","hero","services","features","pricing","stats","reviews","faq","cta","contact","map","footer","cookies","scrolltop"],
+
+  // — CREATIVE & UMENIE —
+  photographer: ["nav","hero","gallery","work","about","pricing","testimonials","faq","booking","contact","footer","cookies","scrolltop"],
+  dj:           ["nav","hero","about","work","gallery","events","press","testimonials","booking","contact","newsletter","footer","cookies","scrolltop"],
+  band:         ["nav","hero","about","work","events","gallery","press","products","newsletter","contact","footer","cookies","scrolltop"],
+  videographer: ["nav","hero","work","gallery","services","pricing","process","testimonials","faq","contact","footer","cookies","scrolltop"],
+  designer:     ["nav","hero","work","gallery","about","services","process","testimonials","contact","footer","cookies","scrolltop"],
+  writer:       ["nav","hero","about","blog","work","newsletter","testimonials","contact","footer","cookies","scrolltop"],
+  influencer:   ["nav","hero","about","ugc","stats","press","partners","newsletter","contact","footer","cookies","scrolltop"],
+  event:        ["nav","hero","about","events","gallery","services","testimonials","partners","leadform","contact","footer","cookies","scrolltop"],
+  fashiondesign:["nav","hero","about","gallery","work","products","process","press","contact","footer","cookies","scrolltop"],
+
+  // — DETI & RODINA —
+  kindergarten: ["nav","hero","about","services","process","team","gallery","pricing","faq","leadform","contact","map","openinghours","footer","cookies","scrolltop"],
+  playcenter:   ["nav","hero","about","services","pricing","gallery","booking","reviews","faq","map","openinghours","contact","footer","cookies","scrolltop"],
+  nanny:        ["nav","hero","about","services","team","process","pricing","testimonials","faq","leadform","contact","footer","cookies","scrolltop"],
+  camps:        ["nav","hero","about","events","gallery","pricing","faq","team","leadform","contact","newsletter","footer","cookies","scrolltop"],
+
+  // — E-COMMERCE —
+  eshop:        ["nav","hero","products","features","reviews","faq","newsletter","cta","contact","footer","cookies","scrolltop","search"],
+  fashion:      ["nav","hero","products","gallery","ugc","reviews","newsletter","faq","footer","cookies","scrolltop","search"],
+  electronics:  ["nav","hero","products","features","reviews","faq","services","newsletter","footer","cookies","scrolltop","search"],
+  "food-shop":  ["nav","hero","products","features","process","reviews","faq","newsletter","contact","footer","cookies","scrolltop","search"],
+  handmade:     ["nav","hero","about","products","gallery","reviews","ugc","newsletter","contact","footer","cookies","scrolltop","search"],
+  "b2b-shop":   ["nav","hero","products","features","about","pricing","partners","leadform","faq","contact","footer","cookies","scrolltop","search"],
+  dropshipping: ["nav","hero","products","features","reviews","ugc","faq","cta","newsletter","footer","cookies","scrolltop","search"],
+  subscription: ["nav","hero","features","pricing","process","testimonials","faq","cta","newsletter","footer","cookies","scrolltop"],
+  jewelry:      ["nav","hero","products","gallery","about","reviews","faq","newsletter","contact","footer","cookies","scrolltop","search"],
+  books:        ["nav","hero","products","blog","reviews","newsletter","faq","events","contact","footer","cookies","scrolltop","search"],
+
+  // — EDUCATION / VZDELÁVANIE —
+  school:       ["nav","hero","services","process","team","pricing","testimonials","faq","leadform","contact","footer","cookies","scrolltop"],
+  coaching:     ["nav","hero","about","services","process","testimonials","pricing","booking","faq","contact","footer","cookies","scrolltop"],
+  "online-edu": ["nav","hero","features","services","pricing","process","testimonials","faq","cta","newsletter","footer","cookies","scrolltop","darkmode"],
+  kids:         ["nav","hero","about","services","gallery","team","pricing","faq","leadform","contact","map","openinghours","footer","cookies","scrolltop"],
+  workshop:     ["nav","hero","about","events","services","pricing","testimonials","faq","leadform","contact","newsletter","footer","cookies","scrolltop"],
+  driving:      ["nav","hero","services","pricing","process","team","faq","testimonials","leadform","contact","map","footer","cookies","scrolltop"],
+  university:   ["nav","hero","about","services","stats","blog","events","faq","leadform","contact","map","footer","cookies","scrolltop","search","language"],
+  tutoring:     ["nav","hero","about","services","pricing","process","testimonials","faq","booking","contact","footer","cookies","scrolltop"],
+  artschool:    ["nav","hero","about","services","team","gallery","events","pricing","faq","leadform","contact","openinghours","footer","cookies","scrolltop"],
+
+  // — FINANCE & INVESTÍCIE —
+  bank:        ["nav","hero","features","services","stats","calculator","testimonials","faq","cta","contact","footer","cookies","scrolltop","darkmode"],
+  investing:   ["nav","hero","features","stats","process","pricing","calculator","testimonials","faq","cta","footer","cookies","scrolltop","darkmode"],
+  broker:      ["nav","hero","services","about","process","calculator","testimonials","faq","leadform","contact","footer","cookies","scrolltop"],
+  crypto:      ["nav","hero","features","stats","process","faq","partners","cta","newsletter","footer","cookies","scrolltop","darkmode"],
+  accounting2: ["nav","hero","services","about","pricing","team","testimonials","faq","leadform","contact","footer","cookies","scrolltop"],
+
+  // — GASTRO —
+  restaurant: ["nav","hero","menu","about","gallery","reviews","booking","events","map","openinghours","contact","footer","cookies","scrolltop"],
+  cafe:       ["nav","hero","menu","about","gallery","reviews","events","map","openinghours","contact","footer","cookies","scrolltop"],
+  bar:        ["nav","hero","menu","about","gallery","events","reviews","map","openinghours","contact","footer","cookies","scrolltop"],
+  club:       ["nav","hero","events","gallery","ugc","booking","map","openinghours","contact","footer","cookies","scrolltop"],
+  foodtruck:  ["nav","hero","menu","about","events","gallery","map","ugc","contact","footer","cookies","scrolltop"],
+  bakery:     ["nav","hero","menu","products","gallery","about","reviews","booking","map","openinghours","contact","footer","cookies","scrolltop"],
+  fastfood:   ["nav","hero","menu","cta","reviews","faq","map","openinghours","contact","footer","cookies","scrolltop"],
+  catering:   ["nav","hero","services","menu","gallery","pricing","testimonials","faq","leadform","contact","footer","cookies","scrolltop"],
+  winebar:    ["nav","hero","menu","products","about","gallery","events","booking","map","openinghours","contact","footer","cookies","scrolltop"],
+
+  // — HEALTH & ZDRAVIE —
+  clinic:     ["nav","hero","services","team","booking","pricing","faq","contact","map","openinghours","footer","cookies","scrolltop"],
+  dental:     ["nav","hero","services","team","gallery","pricing","booking","reviews","faq","contact","map","openinghours","footer","cookies","scrolltop"],
+  pharmacy:   ["nav","hero","products","services","faq","map","openinghours","contact","footer","cookies","scrolltop","search"],
+  physio:     ["nav","hero","services","team","pricing","booking","testimonials","faq","contact","map","openinghours","footer","cookies","scrolltop"],
+  optician:   ["nav","hero","products","services","booking","reviews","faq","map","openinghours","contact","footer","cookies","scrolltop"],
+  nutrition:  ["nav","hero","about","services","pricing","process","testimonials","booking","faq","contact","footer","cookies","scrolltop"],
+  aesthetics: ["nav","hero","services","gallery","team","pricing","booking","testimonials","faq","contact","map","footer","cookies","scrolltop"],
+  lab:        ["nav","hero","services","pricing","process","faq","booking","contact","map","openinghours","footer","cookies","scrolltop"],
+  careservice:["nav","hero","about","services","team","pricing","testimonials","gallery","faq","leadform","contact","map","footer","cookies","scrolltop"],
+
+  // — HR & KARIÉRA —
+  recruitment: ["nav","hero","services","about","process","testimonials","logos","leadform","contact","footer","cookies","scrolltop","search"],
+  jobportal:   ["nav","hero","search","features","services","stats","faq","leadform","contact","footer","cookies","scrolltop"],
+  coworking:   ["nav","hero","about","features","gallery","pricing","booking","testimonials","faq","map","contact","footer","cookies","scrolltop"],
+  careercoach: ["nav","hero","about","services","process","pricing","testimonials","booking","faq","contact","footer","cookies","scrolltop"],
+
+  // — MANUFACTURING & INDUSTRY —
+  factory:    ["nav","hero","about","services","products","stats","awards","partners","leadform","contact","map","footer","cookies","scrolltop"],
+  wholesale:  ["nav","hero","products","about","pricing","partners","leadform","faq","contact","footer","cookies","scrolltop","search"],
+  engineering:["nav","hero","about","services","work","process","awards","stats","leadform","contact","footer","cookies","scrolltop"],
+  packaging:  ["nav","hero","services","products","gallery","process","calculator","leadform","faq","contact","footer","cookies","scrolltop"],
+  metal:      ["nav","hero","services","work","about","process","awards","leadform","contact","footer","cookies","scrolltop"],
+  printing3d: ["nav","hero","services","gallery","process","pricing","calculator","faq","leadform","contact","footer","cookies","scrolltop"],
+
+  // — MÉDIÁ & ZÁBAVA —
+  magazine:   ["nav","hero","blog","press","newsletter","ugc","contact","footer","cookies","scrolltop","search","darkmode"],
+  podcast:    ["nav","hero","about","work","blog","newsletter","testimonials","partners","contact","footer","cookies","scrolltop"],
+  radiotv:    ["nav","hero","about","events","team","blog","gallery","contact","footer","cookies","scrolltop","search"],
+  gaming:     ["nav","hero","about","team","events","stats","gallery","ugc","partners","newsletter","contact","footer","cookies","scrolltop","darkmode"],
+  cinema:     ["nav","hero","events","booking","gallery","about","faq","map","openinghours","contact","footer","cookies","scrolltop"],
+
+  // — NON-PROFIT & INÉ —
+  ngo:      ["nav","hero","about","services","stats","events","team","partners","cta","newsletter","contact","footer","cookies","scrolltop"],
+  church:   ["nav","hero","about","events","services","team","blog","gallery","contact","map","openinghours","footer","cookies","scrolltop"],
+  sport:    ["nav","hero","about","team","events","stats","gallery","partners","newsletter","contact","footer","cookies","scrolltop"],
+  politics: ["nav","hero","about","team","services","events","blog","cta","newsletter","contact","footer","cookies","scrolltop"],
+  charity:  ["nav","hero","about","stats","services","testimonials","partners","cta","newsletter","contact","footer","cookies","scrolltop"],
+  personal: ["nav","hero","about","work","services","stats","testimonials","blog","contact","footer","cookies","scrolltop"],
+
+  // — PETS & ZVIERATÁ —
+  vet:         ["nav","hero","services","team","booking","pricing","faq","contact","map","openinghours","footer","cookies","scrolltop"],
+  petshop:     ["nav","hero","products","services","reviews","faq","map","openinghours","contact","footer","cookies","scrolltop","search"],
+  grooming:    ["nav","hero","services","pricing","gallery","booking","reviews","faq","map","openinghours","contact","footer","cookies","scrolltop"],
+  breeder:     ["nav","hero","about","gallery","products","team","testimonials","faq","contact","footer","cookies","scrolltop"],
+  petboarding: ["nav","hero","services","pricing","gallery","booking","reviews","faq","map","openinghours","contact","footer","cookies","scrolltop"],
+  dogtraining: ["nav","hero","about","services","pricing","process","testimonials","gallery","faq","booking","contact","footer","cookies","scrolltop"],
+
+  // — PUBLIC SECTOR & VEREJNÁ SPRÁVA —
+  municipality: ["nav","hero","about","services","blog","events","faq","contact","map","openinghours","footer","cookies","scrolltop","search","language"],
+  government:   ["nav","hero","about","services","blog","faq","contact","map","footer","cookies","scrolltop","search","language"],
+  library:      ["nav","hero","about","services","events","blog","faq","contact","map","openinghours","footer","cookies","scrolltop","search"],
+  museum:       ["nav","hero","about","events","gallery","pricing","booking","map","openinghours","faq","contact","footer","cookies","scrolltop"],
+
+  // — REMESLÁ & DOMÁCE SLUŽBY —
+  electrician: ["nav","hero","services","about","work","reviews","awards","faq","cta","leadform","contact","map","footer","cookies","scrolltop"],
+  plumber:     ["nav","hero","services","about","work","reviews","awards","faq","cta","leadform","contact","map","footer","cookies","scrolltop"],
+  carpenter:   ["nav","hero","services","gallery","about","process","testimonials","faq","leadform","contact","footer","cookies","scrolltop"],
+  painter:     ["nav","hero","services","gallery","reviews","pricing","faq","leadform","contact","map","footer","cookies","scrolltop"],
+  gardener:    ["nav","hero","services","gallery","process","reviews","faq","leadform","contact","map","footer","cookies","scrolltop"],
+  hvac:        ["nav","hero","services","about","work","reviews","awards","calculator","faq","leadform","contact","footer","cookies","scrolltop"],
+  locksmith:   ["nav","hero","services","pricing","reviews","faq","cta","contact","map","footer","cookies","scrolltop"],
+  chimney:     ["nav","hero","services","about","process","reviews","pricing","faq","leadform","contact","map","footer","cookies","scrolltop"],
+
+  // — REALITKY & STAVEBNÍCTVO —
+  realtor:      ["nav","hero","products","search","about","team","testimonials","process","leadform","contact","map","footer","cookies","scrolltop"],
+  developer:    ["nav","hero","about","products","gallery","features","stats","process","leadform","contact","map","footer","cookies","scrolltop"],
+  architect:    ["nav","hero","work","gallery","about","services","process","team","awards","contact","footer","cookies","scrolltop"],
+  construction: ["nav","hero","services","work","about","stats","process","awards","testimonials","leadform","contact","footer","cookies","scrolltop"],
+  interior:     ["nav","hero","work","gallery","about","services","process","testimonials","contact","footer","cookies","scrolltop"],
+  rental:       ["nav","hero","products","search","features","pricing","booking","faq","map","contact","footer","cookies","scrolltop"],
+  facility:     ["nav","hero","services","about","stats","process","testimonials","partners","leadform","contact","footer","cookies","scrolltop"],
+  surveyor:     ["nav","hero","services","about","process","pricing","faq","work","leadform","contact","map","footer","cookies","scrolltop"],
+
+  // — SLUŽBY B2B/B2C —
+  law:        ["nav","hero","services","about","team","testimonials","faq","leadform","contact","map","footer","cookies","scrolltop"],
+  accounting: ["nav","hero","services","about","pricing","team","testimonials","faq","leadform","contact","footer","cookies","scrolltop"],
+  agency:     ["nav","hero","services","work","about","process","testimonials","logos","team","cta","contact","footer","cookies","scrolltop"],
+  consulting: ["nav","hero","services","about","process","stats","testimonials","faq","leadform","contact","footer","cookies","scrolltop"],
+  cleaning:   ["nav","hero","services","pricing","process","reviews","calculator","faq","leadform","contact","map","footer","cookies","scrolltop"],
+  transport:  ["nav","hero","services","about","stats","features","calculator","partners","leadform","contact","map","footer","cookies","scrolltop"],
+  security:   ["nav","hero","services","about","stats","features","awards","testimonials","leadform","contact","footer","cookies","scrolltop"],
+  insurance:  ["nav","hero","services","about","calculator","testimonials","faq","leadform","contact","footer","cookies","scrolltop"],
+  energy:     ["nav","hero","services","about","calculator","process","stats","reviews","faq","leadform","contact","footer","cookies","scrolltop"],
+  funeral:    ["nav","hero","services","about","pricing","process","faq","cta","contact","map","footer","cookies","scrolltop"],
+
+  // — SPORT & OUTDOOR —
+  sportsclub:  ["nav","hero","about","team","events","stats","gallery","partners","newsletter","contact","footer","cookies","scrolltop"],
+  outdoor:     ["nav","hero","services","gallery","pricing","booking","reviews","faq","map","contact","footer","cookies","scrolltop"],
+  sportshop:   ["nav","hero","products","features","reviews","faq","newsletter","contact","map","footer","cookies","scrolltop","search"],
+  golfski:     ["nav","hero","services","pricing","booking","gallery","map","openinghours","faq","contact","footer","cookies","scrolltop"],
+  trainer:     ["nav","hero","about","services","pricing","testimonials","gallery","booking","faq","contact","footer","cookies","scrolltop"],
+  dance:       ["nav","hero","about","services","team","events","gallery","pricing","testimonials","booking","contact","openinghours","footer","cookies","scrolltop"],
+  martialarts: ["nav","hero","about","services","team","events","pricing","gallery","testimonials","booking","faq","contact","footer","cookies","scrolltop"],
+
+  // — SVADBY & EVENTY —
+  weddingagency: ["nav","hero","about","services","gallery","pricing","testimonials","partners","faq","leadform","contact","footer","cookies","scrolltop"],
+  eventservices: ["nav","hero","services","gallery","work","pricing","partners","testimonials","faq","leadform","contact","footer","cookies","scrolltop"],
+  florist:       ["nav","hero","products","gallery","services","reviews","faq","contact","map","openinghours","footer","cookies","scrolltop","search"],
+  partyrental:   ["nav","hero","products","gallery","pricing","faq","leadform","contact","map","footer","cookies","scrolltop","search"],
+
+  // — TECHNOLÓGIE & SAAS —
+  saas:        ["nav","hero","features","process","pricing","testimonials","logos","faq","cta","newsletter","footer","cookies","scrolltop","darkmode"],
+  app:         ["nav","hero","features","gallery","stats","testimonials","faq","cta","footer","cookies","scrolltop","darkmode"],
+  "agency-dev":["nav","hero","services","work","process","testimonials","logos","team","cta","contact","footer","cookies","scrolltop","darkmode"],
+  startup:     ["nav","hero","features","process","stats","testimonials","cta","newsletter","footer","cookies","scrolltop","darkmode"],
+  ai:          ["nav","hero","features","process","stats","pricing","testimonials","faq","cta","newsletter","footer","cookies","scrolltop","darkmode"],
+  hosting:     ["nav","hero","features","pricing","stats","testimonials","faq","cta","contact","footer","cookies","scrolltop","darkmode"],
+  itservice:   ["nav","hero","services","about","pricing","process","testimonials","faq","leadform","contact","footer","cookies","scrolltop"],
+  cybersec:    ["nav","hero","services","features","process","stats","awards","testimonials","faq","leadform","contact","footer","cookies","scrolltop","darkmode"],
+  isp:         ["nav","hero","features","pricing","services","faq","testimonials","cta","contact","map","footer","cookies","scrolltop"],
+
+  // — TRAVEL & HOSPITALITY —
+  hotel:        ["nav","hero","about","gallery","services","pricing","booking","reviews","faq","map","contact","footer","cookies","scrolltop"],
+  travelagency: ["nav","hero","services","products","gallery","testimonials","faq","booking","newsletter","contact","footer","cookies","scrolltop","search"],
+  tourguide:    ["nav","hero","about","services","gallery","pricing","testimonials","booking","faq","contact","map","footer","cookies","scrolltop"],
+  airbnb:       ["nav","hero","gallery","features","pricing","booking","reviews","map","faq","contact","footer","cookies","scrolltop"],
+  camping:      ["nav","hero","gallery","services","pricing","booking","map","reviews","faq","contact","openinghours","footer","cookies","scrolltop"],
+  infocenter:   ["nav","hero","about","gallery","services","events","pricing","map","openinghours","faq","contact","footer","cookies","scrolltop"],
+
+  // — WELLNESS & BEAUTY —
+  spa:      ["nav","hero","services","pricing","gallery","booking","testimonials","faq","contact","map","openinghours","footer","cookies","scrolltop"],
+  massage:  ["nav","hero","services","pricing","booking","about","testimonials","faq","contact","map","openinghours","footer","cookies","scrolltop"],
+  salon:    ["nav","hero","services","pricing","gallery","team","booking","reviews","faq","contact","map","openinghours","footer","cookies","scrolltop"],
+  beauty:   ["nav","hero","services","pricing","gallery","team","booking","reviews","faq","contact","map","openinghours","footer","cookies","scrolltop"],
+  fitness:  ["nav","hero","services","pricing","team","gallery","events","testimonials","booking","faq","contact","openinghours","footer","cookies","scrolltop"],
+  yoga:     ["nav","hero","about","services","events","pricing","team","testimonials","booking","contact","openinghours","footer","cookies","scrolltop"],
+  therapy:  ["nav","hero","about","services","pricing","process","testimonials","booking","faq","contact","footer","cookies","scrolltop"],
+  tattoo:   ["nav","hero","gallery","team","services","pricing","booking","reviews","faq","contact","openinghours","footer","cookies","scrolltop"],
+};
+
+// Vráti odporúčané sekcie: najprv podľa podkategórie, inak podľa kategórie.
+export function getRecommendedSections(industry, subcat) {
+  return INDUSTRY_SUBCAT_SECTION_PRESETS[subcat] || INDUSTRY_SECTION_PRESETS[industry] || null;
+}
